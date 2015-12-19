@@ -1,13 +1,16 @@
 module Action where
 
-import Model exposing (..)
+import Http
+import PassPredictor exposing (Pass)
+import Time exposing (Time)
 
 
 type Action
-    = Passes (List Pass)
+    = Init Time
+    | Tle Time (Result Http.Error String)
+    | Passes (Result String (List Pass))
     | FilterSat (Maybe String)
     | FilterMinEl Int
     | FilterStartHour Int
     | FilterEndHour Int
     | FilterReset
-    | NoOp

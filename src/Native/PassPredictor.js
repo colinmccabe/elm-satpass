@@ -1,5 +1,16 @@
-var passes = (function () {
-    "use strict";
+Elm.Native.PassPredictor = {};
+Elm.Native.PassPredictor.make = function(localRuntime) {
+    'use strict';
+
+    localRuntime.Native = localRuntime.Native || {};
+    localRuntime.Native.PassPredictor = localRuntime.Native.PassPredictor || {};
+    if (localRuntime.Native.PassPredictor.values)
+    {
+        return localRuntime.Native.PassPredictor.values;
+    }
+
+    var Task = Elm.Native.Task.make(localRuntime);
+    var Utils = Elm.Native.Utils.make(localRuntime);
 
     function toDegInt(rad) {
         return Math.round(rad * 57.2957795);
@@ -14,7 +25,7 @@ var passes = (function () {
             date.getUTCHours(),
             date.getUTCMinutes(),
             date.getUTCSeconds()
-        );    
+        );
 
         var gmst = satellite.gstimeFromDate(
             date.getUTCFullYear(),
@@ -27,7 +38,7 @@ var passes = (function () {
 
         var positionEci = positionAndVelocity.position;
         var positionEcf = satellite.eciToEcf(positionEci, gmst);
-        
+
         return satellite.ecfToLookAngles(observerGd, positionEcf);
     }
 
@@ -48,7 +59,7 @@ var passes = (function () {
         }
         time = new Date(time.getTime() + 1000);
         lookAngle = getLookAngle(satrec, observerGd, time);
-        
+
         var startTime = new Date(time.getTime());
         var startAz = lookAngle.azimuth;
 
@@ -98,34 +109,55 @@ var passes = (function () {
         return passes;
     }
 
-    function get(predictReq) {
-        var ret = [];
-        var computationStart = (new Date()).getTime();
+    function getPasses(tleMap, start, duration) {
+        try {
+            var ret = [];
+            var computationStart = (new Date()).getTime();
 
-        var start = new Date(predictReq.start);
+            // Copy Elm assoclist into JS array
+            var tleMapNative = [];
 
-        predictReq.tle.map(function(sat) {
-            var tleLines = sat[1];
-            var passes = getPassesForSat(tleLines, start, predictReq.duration);
-            
-            passes = passes.map(function(pass) {
-                pass.satName = sat[0];
-                return pass;
+            while (tleMap.ctor !== '[]') {
+                var satName = tleMap._0._0;
+                var tleLinesCopy = {
+                    line1: tleMap._0._1.line1,
+                    line2: tleMap._0._1.line2
+                }
+
+                tleMapNative.push([satName, tleLinesCopy]);
+
+                tleMap = tleMap._1;
+            }
+
+            // get predictions from satellite.js
+            var start = new Date(start);
+
+            tleMapNative.map(function(sat) {
+                var tleLines = sat[1];
+                var passes = getPassesForSat(tleLines, start, duration);
+
+                passes = passes.map(function(pass) {
+                    pass.satName = sat[0];
+                    return pass;
+                });
+
+                ret = ret.concat(passes);
             });
-            
-            ret = ret.concat(passes);
-        });
 
-        ret.sort(function(pass1, pass2) {
-            return pass1.startTime - pass2.startTime;
-        });
+            // sort passes
+            ret.sort(function(pass1, pass2) {
+                return pass1.startTime - pass2.startTime;
+            });
 
-        console.log((new Date()).getTime() - computationStart);
+            console.log((new Date()).getTime() - computationStart);
 
-        return ret;
+            return Task.succeed(Utils.list(ret));
+        } catch (err) {
+            return Task.fail('' + err.message);
+        }
     }
 
-    return {
-        get: get
+    return localRuntime.Native.PassPredictor.values = {
+        getPasses: F3(getPasses)
     };
-})();
+};

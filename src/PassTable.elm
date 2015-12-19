@@ -3,12 +3,22 @@ module PassTable (view) where
 import Date exposing (Date)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Model exposing (Model, Pass, Tle)
+import Model exposing (Model)
+import PassPredictor exposing (Pass)
 import String
 
 
 view : Model -> Html
 view model =
+    case model.passes of
+        Ok passes ->
+            passTable model passes
+        Err msg ->
+            div [] [ text msg ]
+
+
+passTable : Model -> List Pass -> Html
+passTable model passes =
     let baseFilterFn pass =
             let passHour = Date.hour pass.startTime
             in
@@ -22,7 +32,7 @@ view model =
                 Just sat ->
                     (\pass -> baseFilterFn pass && pass.satName == sat) 
         filteredPasses =
-            model.passes |> List.filter filterFn
+            passes |> List.filter filterFn
     in
         div
             []

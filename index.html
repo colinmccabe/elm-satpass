@@ -4,20 +4,14 @@
     <meta charset="UTF-8">
     <title>SatPass</title>
     <link rel="stylesheet" href="css/bootstrap.min.css">
-    <script type="text/javascript" src="vendor/satellite.min.js"></script>
-    <script type="text/javascript" src="js/passes.js"></script>
+    <script type="text/javascript" src="js/satellite.min.js"></script>
     <script type="text/javascript" src="target/elm.js"></script>
 </head>
 <body>
 </body>
 <script type="text/javascript">
-    var container = document.getElementById('container-fluid');
-    var app = Elm.fullscreen(Elm.SatPass, {
-        jsPredictions: []
-    });
+    var app = Elm.fullscreen(Elm.SatPass, {initSignal: false});
 
-    app.ports.jsPredictionRequests.subscribe(function (predictReq) {
-        app.ports.jsPredictions.send(passes.get(predictReq));
-    });
+    setTimeout(function(){ app.ports.initSignal.send(true); }, 0);
 </script>
 </html>
