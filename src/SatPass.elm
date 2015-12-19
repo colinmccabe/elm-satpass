@@ -2,10 +2,11 @@ module SatPass where
 
 {- @docs main -}
 
-import Action exposing (Action)
+import Action as A exposing (Action)
 import Date
 import Html exposing (Html)
 import Html.Attributes as HtmlAttr
+import Html.Events
 import Http
 import Model exposing (Model, Pass, PassRequest, Tle)
 import PassTable
@@ -30,7 +31,7 @@ mySats =
 
 events : Signal.Mailbox Action
 events =
-    Signal.mailbox Action.NoOp
+    Signal.mailbox A.NoOp
 
 
 model : Signal Model
@@ -49,10 +50,10 @@ main =
 
 -- prediction pipeline
 
-passesReq : Time -> Result Http.Error (List (String, Tle)) -> PassRequest
+passesReq : Time -> Result a (List (String, Tle)) -> PassRequest
 passesReq startTime tleResult =
     { start = startTime
-    , duration = 48 * Time.hour
+    , duration = 3 * 24 * Time.hour
     , tle =
         case tleResult of
             Ok tle -> tle
@@ -73,7 +74,7 @@ port tleRequests : Signal (Task a ())
 port tleRequests =
     Signal.Time.startTime
         |> Signal.map getTleTask
-        |> Signal.map ((flip Task.andThen) (\resp -> Signal.send tleResponses.address resp))
+        |> Signal.map ((flip Task.andThen) (Signal.send tleResponses.address))
 
 
 tleResponses : Signal.Mailbox PassRequest
@@ -122,7 +123,7 @@ predictions =
     in
         jsPredictions
             |> Signal.map (List.map toPass)
-            |> Signal.map Action.Passes
+            |> Signal.map A.Passes
 
 
 -- Model
@@ -143,25 +144,33 @@ init =
 update : Action -> Model -> Model
 update action model =
     case action of
-        Action.Passes ps ->
+        A.Passes ps ->
             { model
                 | passes = ps
-                , sats = ps |> List.map (\pass -> pass.satName) |> Set.fromList
+                , sats = ps |> List.map .satName |> Set.fromList
             }
 
-        Action.SatFilter satMay ->
+        A.FilterSat satMay ->
             { model | satFilter = satMay }
 
-        Action.MinEl el ->
+        A.FilterMinEl el ->
             { model | minEl = el }
 
-        Action.StartHour hr ->
+        A.FilterStartHour hr ->
             { model | startHour = hr }
 
-        Action.EndHour hr ->
+        A.FilterEndHour hr ->
             { model | endHour = hr }
 
-        Action.NoOp ->
+        A.FilterReset ->
+            { model
+                | satFilter = Nothing
+                , minEl = 30
+                , startHour = 6
+                , endHour = 22
+            }
+
+        A.NoOp ->
             model
 
 
@@ -172,22 +181,46 @@ view addr model =
     Html.div
         [ HtmlAttr.class "container" ]
         [ Html.div
-            [ HtmlAttr.class "row" ]
+            [ HtmlAttr.class "row"
+            , HtmlAttr.style [("margin-top", "15px")]]
             [ Html.div
                 [ HtmlAttr.class "col-xs-6" ]
-                [ Slider.view addr model "Start hour" Action.StartHour 0 23 6 ]
+                [ Slider.view
+                    addr
+                    "Start hour"
+                    A.FilterStartHour
+                    0 23 6
+                    model.startHour
+                ]
             , Html.div
                 [ HtmlAttr.class "col-xs-6" ]
-                [ Slider.view addr model "End hour" Action.EndHour 0 23 22 ]
+                [ Slider.view
+                    addr
+                    "End hour"
+                    A.FilterEndHour
+                    0 23 22
+                    model.endHour
+                ]
             ]
         , Html.div
             [ HtmlAttr.class "row" ]
             [ Html.div
-                [ HtmlAttr.class "col-xs-6" ]
-                [ Slider.view addr model "Min El" Action.MinEl 30 89 30 ]
+                [ HtmlAttr.class "col-xs-4" ]
+                [ Slider.view addr "Min El" A.FilterMinEl 30 89 30 model.minEl ]
             , Html.div
-                [ HtmlAttr.class "col-xs-6" ]
+                [ HtmlAttr.class "col-xs-4" ]
                 [ SatSelect.view addr model ]
+            , Html.div
+                [ HtmlAttr.class "col-xs-4" ]
+                [ Html.label [] []
+                , Html.button
+                    [ HtmlAttr.class "btn btn-primary"
+                    , HtmlAttr.type' "submit"
+                    , HtmlAttr.style [("display", "block"), ("width", "100%")]
+                    , Html.Events.onClick addr A.FilterReset
+                    ]
+                    [ Html.text "Reset" ]
+                ]
             ]
         , PassTable.view model
         ]

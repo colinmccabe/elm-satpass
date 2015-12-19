@@ -20,9 +20,9 @@ view addr model =
                 [ text sat ]
         optionValToAction val =
             if val == "Any" then
-                Action.SatFilter Nothing
+                Action.FilterSat Nothing
             else
-                Action.SatFilter (Just val)
+                Action.FilterSat (Just val)
         decodeEvent =
             JD.customDecoder
                 ( JD.at ["target", "value"] JD.string )

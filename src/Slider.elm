@@ -5,20 +5,19 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (on)
 import Json.Decode as JD
-import Model exposing (Model)
 import Signal
 import String
 
 view
     : Signal.Address Action
-    -> Model
     -> String
     -> (Int -> Action)
     -> Int 
     -> Int
     -> Int
+    -> Int
     -> Html
-view addr model title action min max default =
+view addr title action min max default currentVal =
     let decodeEvent =
             JD.customDecoder
                 ( JD.at ["target", "value"] JD.string )
@@ -36,4 +35,5 @@ view addr model title action min max default =
                 , on "input" decodeEvent (Signal.message addr)
                 ]
                 []
+            , text (toString currentVal)
             ]

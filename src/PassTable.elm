@@ -53,18 +53,18 @@ tableHead =
 
 passRow : Pass -> Html
 passRow pass =
-    let tdTxt txt =
+    let td_ txt =
             td [] [(text txt)]
     in
         tr
             []
             [ td [] [ strong [] [text pass.satName] ]
-            , tdTxt (showDay pass.startTime)
-            , tdTxt (showDegrees pass.maxEl)
-            , tdTxt (showTime pass.startTime)
-            , tdTxt (showTime pass.endTime)
-            , tdTxt (showDegrees pass.startAz)
-            , tdTxt (showDegrees pass.endAz)
+            , td_ (showDay pass.startTime)
+            , td_ (showDegrees pass.maxEl)
+            , td_ (showTime pass.startTime)
+            , td_ (showTime pass.endTime)
+            , td_ (showDegrees pass.startAz)
+            , td_ (showDegrees pass.endAz)
             ]
 
 
@@ -82,6 +82,5 @@ showTime : Date -> String
 showTime date =
     let h = date |> Date.hour   |> toString
         m = date |> Date.minute |> toString |> String.padLeft 2 '0'
-        s = date |> Date.second |> toString |> String.padLeft 2 '0'
     in
-        h ++ ":" ++ m ++ ":" ++ s
+        h ++ ":" ++ m

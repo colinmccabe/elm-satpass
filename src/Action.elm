@@ -5,8 +5,9 @@ import Model exposing (..)
 
 type Action
     = Passes (List Pass)
-    | SatFilter (Maybe String)
-    | MinEl Int
-    | StartHour Int
-    | EndHour Int
+    | FilterSat (Maybe String)
+    | FilterMinEl Int
+    | FilterStartHour Int
+    | FilterEndHour Int
+    | FilterReset
     | NoOp
