@@ -149,7 +149,8 @@ view addr model =
                     addr
                     "Start hour"
                     A.FilterStartHour
-                    0 23 6
+                    0
+                    23
                     model.startHour
                 ]
             , Html.div
@@ -158,7 +159,8 @@ view addr model =
                     addr
                     "End hour"
                     A.FilterEndHour
-                    0 23 22
+                    0
+                    23
                     model.endHour
                 ]
             ]
@@ -166,7 +168,7 @@ view addr model =
             [ HtmlAttr.class "row" ]
             [ Html.div
                 [ HtmlAttr.class "col-xs-4" ]
-                [ Slider.view addr "Min El" A.FilterMinEl 30 89 30 model.minEl ]
+                [ Slider.view addr "Min El" A.FilterMinEl 30 89 model.minEl ]
             , Html.div
                 [ HtmlAttr.class "col-xs-4" ]
                 [ SatSelect.view addr model ]

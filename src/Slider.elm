@@ -15,9 +15,8 @@ view
     -> Int 
     -> Int
     -> Int
-    -> Int
     -> Html
-view addr title action min max default currentVal =
+view addr title action min max currentVal =
     let decodeEvent =
             JD.customDecoder
                 ( JD.at ["target", "value"] JD.string )
@@ -31,7 +30,7 @@ view addr title action min max default currentVal =
                 , Html.Attributes.min (toString min)
                 , Html.Attributes.max (toString max)
                 , step "1"
-                , attribute "value" (toString default)
+                , value (toString currentVal)
                 , on "input" decodeEvent (Signal.message addr)
                 ]
                 []
