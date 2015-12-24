@@ -7,7 +7,7 @@ import Time exposing (Time)
 
 type Action
     = Init Time
-    | Tle Time (Result Http.Error String)
+    | Tle (Result Http.Error String)
     | Passes (Result String (List Pass))
     | FilterSat (Maybe String)
     | FilterMinEl Int

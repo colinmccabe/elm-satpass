@@ -43,50 +43,50 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
     }
 
     function getNextPass(satrec, observerGd, searchBegin) {
-        var time = new Date(searchBegin.getTime());
+        var date = new Date(searchBegin.getTime());
         var lookAngle = undefined;
 
         // Step forward coarsely until el > 0
         do {
-            lookAngle = getLookAngle(satrec, observerGd, time);
-            time = new Date(time.getTime() + 60000);
+            lookAngle = getLookAngle(satrec, observerGd, date);
+            date = new Date(date.getTime() + 60000);
         } while (lookAngle.elevation < 0.0);
 
         // Step back finely to pass start
         while (lookAngle.elevation > 0.0) {
-            time = new Date(time.getTime() - 1000);
-            lookAngle = getLookAngle(satrec, observerGd, time);
+            date = new Date(date.getTime() - 1000);
+            lookAngle = getLookAngle(satrec, observerGd, date);
         }
-        time = new Date(time.getTime() + 1000);
-        lookAngle = getLookAngle(satrec, observerGd, time);
+        date = new Date(date.getTime() + 1000);
+        lookAngle = getLookAngle(satrec, observerGd, date);
 
-        var startTime = new Date(time.getTime());
+        var startTime = date.getTime();
         var startAz = lookAngle.azimuth;
 
         // Step forward to pass end, record maxEl
         var maxEl = -1.0;
 
         while (lookAngle.elevation > 0.0) {
-            lookAngle = getLookAngle(satrec, observerGd, time);
-            time = new Date(time.getTime() + 1000);
+            lookAngle = getLookAngle(satrec, observerGd, date);
+            date = new Date(date.getTime() + 1000);
             maxEl = lookAngle.elevation > maxEl
                         ? lookAngle.elevation
                         : maxEl;
         }
 
-        var endTime = new Date(time.getTime());
+        var endTime = date.getTime();
         var endAz = lookAngle.azimuth;
 
         return {
             maxEl: toDegInt(maxEl),
-            startTime: startTime.getTime(),
-            endTime: endTime.getTime(),
+            startTime: startTime,
+            endTime: endTime,
             startAz: toDegInt(startAz),
             endAz: toDegInt(endAz)
         };
     }
 
-    function getPassesForSat(tle, start, duration) {
+    function getPassesForSat(tle, from, duration) {
         var satrec = satellite.twoline2satrec(tle.line1, tle.line2);
         var deg2rad = 0.0174532925;
 
@@ -96,7 +96,7 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
             height: 0.0
         };
 
-        var searchBegin = new Date(start.getTime());
+        var searchBegin = new Date(from);
         var searchEnd = new Date(searchBegin.getTime() + duration);
         var passes = [];
 
@@ -109,49 +109,53 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
         return passes;
     }
 
-    function getPasses(tleMap, start, duration) {
+    function getPasses(elm_tleMap, elm_from, elm_duration) {
         try {
-            var ret = [];
             var computationStart = (new Date()).getTime();
 
-            // Copy Elm assoclist into JS array
-            var tleMapNative = [];
+            // Copy args from Elm
+            var from = Number(elm_from);
+            var duration = Number(elm_duration);
+            var tleMap = [];
 
-            while (tleMap.ctor !== '[]') {
-                var satName = tleMap._0._0;
-                var tleLinesCopy = {
-                    line1: tleMap._0._1.line1,
-                    line2: tleMap._0._1.line2
-                }
+            while (elm_tleMap.ctor !== '[]') {
+                var satName = String(elm_tleMap._0._0);
+                var tleLines = Object.assign({}, elm_tleMap._0._1);
 
-                tleMapNative.push([satName, tleLinesCopy]);
+                tleMap.push([satName, tleLines]);
 
-                tleMap = tleMap._1;
+                elm_tleMap = elm_tleMap._1;
             }
 
             // get predictions from satellite.js
-            var start = new Date(start);
+            var allPasses = [];
 
-            tleMapNative.map(function(sat) {
+            tleMap.map(function (sat) {
                 var tleLines = sat[1];
-                var passes = getPassesForSat(tleLines, start, duration);
+                var passes = getPassesForSat(tleLines, from, duration);
 
                 passes = passes.map(function(pass) {
                     pass.satName = sat[0];
                     return pass;
                 });
 
-                ret = ret.concat(passes);
+                allPasses = allPasses.concat(passes);
             });
 
-            // sort passes
-            ret.sort(function(pass1, pass2) {
+            allPasses.sort(function(pass1, pass2) {
                 return pass1.startTime - pass2.startTime;
+            });
+
+            // Copy results
+            var elm_allPasses = [];
+
+            allPasses.forEach(function (pass) {
+                elm_allPasses.push(Object.assign({}, pass));
             });
 
             console.log((new Date()).getTime() - computationStart);
 
-            return Task.succeed(Utils.list(ret));
+            return Task.succeed(Utils.list(elm_allPasses));
         } catch (err) {
             return Task.fail('' + err.message);
         }

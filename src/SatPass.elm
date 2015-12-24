@@ -26,7 +26,7 @@ duration =
 mySats : List String
 mySats =
     [ "FO-29", "XW-2F", "NO-44", "SO-50", "AO-73", "NO-84", "AO-85"
-    , "RS-15", "ISS"
+    , "RS-15", "XW-2A", "XW-2B", "XW-2C", "XW-2D", "ISS"
     ]
 
 
@@ -63,7 +63,8 @@ port initSignal : Signal Bool
 
 init : (Model, Effects Action)
 init =
-    ( { passes = Err "Loading..."
+    ( { programStartTime = Nothing
+      , passes = Err "Loading..."
       , sats = Set.empty
       , satFilter = Nothing
       , minEl = 30
@@ -79,17 +80,23 @@ init =
 update : Action -> Model -> (Model, Effects Action)
 update action model =
     case action of
-        A.Init startTime ->
-            ( model
-            , Effects.task (getTle startTime)
+        A.Init timestamp ->
+            ( { model | programStartTime = Just timestamp }
+            , Effects.task getTle
             )
 
-        A.Tle startTime (Ok rawTle) ->
-            ( model
-            , Effects.task (getPasses rawTle startTime duration mySats)
-            )
+        A.Tle (Ok rawTle) ->
+            case model.programStartTime of
+                Just t ->
+                    ( model
+                    , Effects.task (getPasses rawTle mySats t duration)
+                    )
+                Nothing ->
+                    ( { model | passes = Err "Failed to get current time" }
+                    , Effects.none
+                    )
 
-        A.Tle _ (Err msg) ->
+        A.Tle (Err msg) ->
             ( { model
                 | passes = Err ("Could not get TLE: " ++ (toString msg))
               }
@@ -190,14 +197,14 @@ view addr model =
 
 -- tasks
 
-getTle : Time -> Task a Action
-getTle startTime =
+getTle : Task a Action
+getTle =
     Http.getString "nasabare.txt"
         |> Task.toResult
-        |> Task.map (A.Tle startTime)
+        |> Task.map A.Tle
 
 
-getPasses : String -> Time -> Time -> List String -> Task a Action
-getPasses rawTle startTime duration sats =
-    PassPredictor.getPasses rawTle startTime duration sats
+getPasses : String -> List String -> Time -> Time -> Task a Action
+getPasses rawTle desiredSats from duration =
+    PassPredictor.getPasses rawTle desiredSats from duration
         |> Task.map A.Passes

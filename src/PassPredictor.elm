@@ -23,8 +23,8 @@ type alias Tle =
     }
 
 
-getPasses : String -> Time -> Time -> List String -> Task a (Result String (List Pass))
-getPasses rawTle start duration sats  =
+getPasses : String -> List String -> Time -> Time -> Task a (Result String (List Pass))
+getPasses rawTle desiredSats from duration =
     let toElmPass nativePass =
             { nativePass
                 | startTime = Date.fromTime (nativePass.startTime * Time.millisecond)
@@ -32,8 +32,8 @@ getPasses rawTle start duration sats  =
             }
         nativePasses =
             Native.PassPredictor.getPasses
-                ( parseTle sats rawTle )
-                ( Time.inMilliseconds start )
+                ( parseTle rawTle desiredSats )
+                ( Time.inMilliseconds from )
                 ( Time.inMilliseconds duration )
     in
         nativePasses
@@ -41,12 +41,12 @@ getPasses rawTle start duration sats  =
             |> Task.toResult
 
 
-parseTle : List String -> String -> List (String, Tle)
-parseTle sats rawTle =
+parseTle : String -> List String -> List (String, Tle)
+parseTle rawTle desiredSats =
     rawTle
         |> String.split "\n"
         |> toAssocList
-        |> List.filter (\(satName, _) -> List.member satName sats)
+        |> List.filter (\(satName, _) -> List.member satName desiredSats)
 
 
 toAssocList : List String -> List (String, Tle)

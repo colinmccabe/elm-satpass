@@ -22,9 +22,9 @@ passTable model passes =
     let baseFilterFn pass =
             let passHour = Date.hour pass.startTime
             in
-                (passHour > model.startHour)
-                    && (passHour < model.endHour)
-                    && (pass.maxEl > model.minEl)
+                (passHour >= model.startHour)
+                    && (passHour <= model.endHour)
+                    && (pass.maxEl >= model.minEl)
         filterFn =
             case model.satFilter of
                 Nothing ->
