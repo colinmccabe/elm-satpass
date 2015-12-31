@@ -2,15 +2,14 @@ module SatPass where
 
 import Action as A exposing (Action)
 import Effects exposing (Effects)
-import Html exposing (Html)
-import Html.Attributes as HtmlAttr
+import Html as H exposing (Html)
+import Html.Attributes as HA
 import Html.Events
 import Http
 import Model exposing (Model)
 import PassPredictor
 import PassTable
 import SatSelect
-import Set
 import Signal
 import Slider
 import StartApp
@@ -63,9 +62,7 @@ port initSignal : Signal Bool
 
 init : (Model, Effects Action)
 init =
-    ( { programStartTime = Nothing
-      , passes = Err "Loading..."
-      , sats = Set.empty
+    ( { passes = Err "Loading..."
       , satFilter = Nothing
       , minEl = 30
       , startHour = 6
@@ -81,40 +78,12 @@ update : Action -> Model -> (Model, Effects Action)
 update action model =
     case action of
         A.Init timestamp ->
-            ( { model | programStartTime = Just timestamp }
-            , Effects.task getTle
+            ( model
+            , Effects.task (getPasses mySats timestamp duration)
             )
 
-        A.Tle (Ok rawTle) ->
-            case model.programStartTime of
-                Just t ->
-                    ( model
-                    , Effects.task (getPasses rawTle mySats t duration)
-                    )
-                Nothing ->
-                    ( { model | passes = Err "Failed to get current time" }
-                    , Effects.none
-                    )
-
-        A.Tle (Err msg) ->
-            ( { model
-                | passes = Err ("Could not get TLE: " ++ (toString msg))
-              }
-            , Effects.none
-            )
-
-        A.Passes (Ok ps) ->
-            ( { model
-                | passes = Ok ps
-                , sats = ps |> List.map .satName |> Set.fromList
-              }
-            , Effects.none
-            )
-
-        A.Passes (Err msg) ->
-            ( { model
-                | passes = Err ("Could not calculate passes: " ++ (toString msg))
-              }
+        A.Passes passes ->
+            ( { model | passes = passes}
             , Effects.none
             )
 
@@ -143,15 +112,15 @@ update action model =
 
 -- View
 
-view : Signal.Address Action -> Model -> Html.Html
+view : Signal.Address Action -> Model -> Html
 view addr model =
-    Html.div
-        [ HtmlAttr.class "container" ]
-        [ Html.div
-            [ HtmlAttr.class "row"
-            , HtmlAttr.style [("margin-top", "15px")]]
-            [ Html.div
-                [ HtmlAttr.class "col-xs-6" ]
+    H.div
+        [ HA.class "container" ]
+        [ H.div
+            [ HA.class "row"
+            , HA.style [("margin-top", "15px")]]
+            [ H.div
+                [ HA.class "col-xs-6" ]
                 [ Slider.view
                     addr
                     "Start hour"
@@ -160,8 +129,8 @@ view addr model =
                     23
                     model.startHour
                 ]
-            , Html.div
-                [ HtmlAttr.class "col-xs-6" ]
+            , H.div
+                [ HA.class "col-xs-6" ]
                 [ Slider.view
                     addr
                     "End hour"
@@ -171,24 +140,24 @@ view addr model =
                     model.endHour
                 ]
             ]
-        , Html.div
-            [ HtmlAttr.class "row" ]
-            [ Html.div
-                [ HtmlAttr.class "col-xs-4" ]
+        , H.div
+            [ HA.class "row" ]
+            [ H.div
+                [ HA.class "col-xs-4" ]
                 [ Slider.view addr "Min El" A.FilterMinEl 30 89 model.minEl ]
-            , Html.div
-                [ HtmlAttr.class "col-xs-4" ]
-                [ SatSelect.view addr model ]
-            , Html.div
-                [ HtmlAttr.class "col-xs-4" ]
-                [ Html.label [] []
-                , Html.button
-                    [ HtmlAttr.class "btn btn-primary"
-                    , HtmlAttr.type' "submit"
-                    , HtmlAttr.style [("display", "block"), ("width", "100%")]
+            , H.div
+                [ HA.class "col-xs-4" ]
+                [ SatSelect.view addr mySats ]
+            , H.div
+                [ HA.class "col-xs-4" ]
+                [ H.label [] []
+                , H.button
+                    [ HA.class "btn btn-primary"
+                    , HA.type' "submit"
+                    , HA.style [("display", "block"), ("width", "100%")]
                     , Html.Events.onClick addr A.FilterReset
                     ]
-                    [ Html.text "Reset" ]
+                    [ H.text "Reset" ]
                 ]
             ]
         , PassTable.view model
@@ -197,14 +166,11 @@ view addr model =
 
 -- tasks
 
-getTle : Task a Action
-getTle =
+getPasses : List String -> Time -> Time -> Task a Action
+getPasses sats from duration =
     Http.getString "nasabare.txt"
+        |> Task.mapError toString
+        |> (flip Task.andThen) (PassPredictor.getPasses sats from duration)
+        |> Task.mapError (\msg -> "Could not calculate passes: " ++ msg)
         |> Task.toResult
-        |> Task.map A.Tle
-
-
-getPasses : String -> List String -> Time -> Time -> Task a Action
-getPasses rawTle desiredSats from duration =
-    PassPredictor.getPasses rawTle desiredSats from duration
         |> Task.map A.Passes

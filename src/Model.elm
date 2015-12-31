@@ -6,9 +6,7 @@ import Time exposing (Time)
 
 
 type alias Model =
-    { programStartTime : Maybe Time
-    , passes : Result String (List Pass)
-    , sats : Set String
+    { passes : Result String (List Pass)
     , satFilter : Maybe String
     , minEl : Int
     , startHour : Int

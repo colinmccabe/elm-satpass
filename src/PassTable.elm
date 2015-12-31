@@ -91,6 +91,6 @@ showDay date =
 showTime : Date -> String
 showTime date =
     let h = date |> Date.hour   |> toString
-        m = date |> Date.minute |> toString |> String.padLeft 2 '0'
+        mm = date |> Date.minute |> toString |> String.padLeft 2 '0'
     in
-        h ++ ":" ++ m
+        h ++ ":" ++ mm

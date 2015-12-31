@@ -109,7 +109,7 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
         return passes;
     }
 
-    function getPasses(elm_tleMap, elm_from, elm_duration) {
+    function getPasses(elm_from, elm_duration, elm_tleMap) {
         try {
             var computationStart = (new Date()).getTime();
 

@@ -5,16 +5,12 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (on)
 import Json.Decode as JD
-import Model exposing (Model)
-import Set
 import Signal exposing (Address)
 
 
-view : Address Action -> Model -> Html
-view addr model =
-    let satList =
-            "Any" :: (Set.toList model.sats)
-        toOption sat =
+view : Address Action -> List String -> Html
+view addr sats =
+    let toOption sat =
             option
                 [ value sat ]
                 [ text sat ]
@@ -35,5 +31,5 @@ view addr model =
                 [ class "form-control"
                 , on "change" decodeEvent (Signal.message addr)
                 ]
-                ( List.map toOption satList)
+                ( List.map toOption ("Any" :: sats))
             ]
