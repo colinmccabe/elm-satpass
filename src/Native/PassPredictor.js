@@ -63,15 +63,17 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
         var startTime = date.getTime();
         var startAz = lookAngle.azimuth;
 
-        // Step forward to pass end, record maxEl
+        // Step forward to pass end, record apogee
         var maxEl = -1.0;
+        var apogeeTime = 0;
 
         while (lookAngle.elevation > 0.0) {
             lookAngle = getLookAngle(satrec, observerGd, date);
             date = new Date(date.getTime() + 1000);
-            maxEl = lookAngle.elevation > maxEl
-                        ? lookAngle.elevation
-                        : maxEl;
+            if (lookAngle.elevation > maxEl) {
+                maxEl = lookAngle.elevation;
+                apogeeTime = date.getTime();
+            }
         }
 
         var endTime = date.getTime();
@@ -80,6 +82,7 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
         return {
             maxEl: toDegInt(maxEl),
             startTime: startTime,
+            apogeeTime: apogeeTime,
             endTime: endTime,
             startAz: toDegInt(startAz),
             endAz: toDegInt(endAz)

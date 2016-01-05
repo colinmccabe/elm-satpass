@@ -11,6 +11,7 @@ type alias Pass =
     { satName : String
     , maxEl : Int
     , startTime : Date
+    , apogeeTime : Date
     , endTime : Date
     , startAz : Int
     , endAz : Int
@@ -25,10 +26,13 @@ type alias Tle =
 
 getPasses : List String -> Time -> Time -> String -> Task String (List Pass)
 getPasses desiredSats from duration rawTle =
-    let toElmPass nativePass =
+    let toDate jsTime =
+            Date.fromTime (jsTime * Time.millisecond)
+        toElmPass nativePass =
             { nativePass
-                | startTime = Date.fromTime (nativePass.startTime * Time.millisecond)
-                , endTime = Date.fromTime (nativePass.endTime * Time.millisecond)
+                | startTime = toDate nativePass.startTime
+                , endTime = toDate nativePass.endTime
+                , apogeeTime = toDate nativePass.apogeeTime
             }
         nativePasses =
             Native.PassPredictor.getPasses

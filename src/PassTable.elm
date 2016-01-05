@@ -53,8 +53,9 @@ tableHead =
             [ th [] [text "Satellite"]
             , th [] [text "Day"]
             , th [] [text "Max El"]
-            , th [] [text "Start Time"]
-            , th [] [text "End Time"]
+            , th [] [text "Start"]
+            , th [] [text "Apogee"]
+            , th [] [text "End"]
             , th [] [text "Start Az"]
             , th [] [text "End Az"]
             ]
@@ -72,6 +73,7 @@ passRow pass =
             , td_ (showDay pass.startTime)
             , td_ (showDegrees pass.maxEl)
             , td_ (showTime pass.startTime)
+            , td_ (showTime pass.apogeeTime)
             , td_ (showTime pass.endTime)
             , td_ (showDegrees pass.startAz)
             , td_ (showDegrees pass.endAz)

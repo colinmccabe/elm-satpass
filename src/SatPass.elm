@@ -66,7 +66,7 @@ init =
       , satFilter = Nothing
       , minEl = 30
       , startHour = 6
-      , endHour = 22
+      , endHour = 17
       }
     , Effects.none
     )
