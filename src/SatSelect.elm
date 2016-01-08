@@ -1,6 +1,5 @@
 module SatSelect (view) where
 
-import Action exposing (Action)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (on)
@@ -8,17 +7,17 @@ import Json.Decode as JD
 import Signal exposing (Address)
 
 
-view : Address Action -> List String -> Html
-view addr sats =
+view : Address a -> (Maybe String -> a) -> List String -> Html
+view addr action sats =
     let toOption sat =
             option
                 [ value sat ]
                 [ text sat ]
         optionValToAction val =
             if val == "Any" then
-                Action.FilterSat Nothing
+                action Nothing
             else
-                Action.FilterSat (Just val)
+                action (Just val)
         decodeEvent =
             JD.customDecoder
                 ( JD.at ["target", "value"] JD.string )

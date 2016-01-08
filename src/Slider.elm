@@ -1,6 +1,5 @@
 module Slider (view) where
 
-import Action exposing (Action)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (on)
@@ -9,9 +8,9 @@ import Signal
 import String
 
 view
-    : Signal.Address Action
+    : Signal.Address a
     -> String
-    -> (Int -> Action)
+    -> (Int -> a)
     -> Int 
     -> Int
     -> Int

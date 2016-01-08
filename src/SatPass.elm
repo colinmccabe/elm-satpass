@@ -1,17 +1,13 @@
 module SatPass where
 
-import Action as A exposing (Action)
 import Effects exposing (Effects)
+import PassFilter
 import Html as H exposing (Html)
 import Html.Attributes as HA
-import Html.Events
 import Http
-import Model exposing (Model)
 import PassPredictor
 import PassTable
-import SatSelect
 import Signal
-import Slider
 import StartApp
 import Task exposing (Task)
 import Time exposing (Time)
@@ -31,6 +27,9 @@ mySats =
 
 -- StartApp
 
+port initSignal : Signal Bool
+
+
 app : StartApp.App Model
 app =
     StartApp.start
@@ -38,7 +37,7 @@ app =
         , inputs =
             [ initSignal
                 |> Time.timestamp
-                |> Signal.map (fst >> A.Init)
+                |> Signal.map (fst >> Init)
             ]
         , update = update
         , view = view
@@ -55,21 +54,29 @@ port tasks =
     app.tasks
 
 
-port initSignal : Signal Bool
-
-
 -- Model
+
+type alias Model =
+    { passes : Result String (List PassPredictor.Pass)
+    , filter : PassFilter.Model
+    }
+
 
 init : (Model, Effects Action)
 init =
     ( { passes = Err "Loading..."
-      , satFilter = Nothing
-      , minEl = 30
-      , startHour = 6
-      , endHour = 17
+      , filter = PassFilter.init
       }
     , Effects.none
     )
+
+
+-- Action
+
+type Action
+    = Init Time
+    | Passes (Result String (List PassPredictor.Pass))
+    | Filter PassFilter.Action
 
 
 -- Update
@@ -77,35 +84,18 @@ init =
 update : Action -> Model -> (Model, Effects Action)
 update action model =
     case action of
-        A.Init timestamp ->
+        Init timestamp ->
             ( model
             , Effects.task (getPasses mySats timestamp duration)
             )
 
-        A.Passes passes ->
-            ( { model | passes = passes}
+        Passes passes ->
+            ( { model | passes = passes }
             , Effects.none
             )
 
-        A.FilterSat satMay ->
-            ( { model | satFilter = satMay }, Effects.none )
-
-        A.FilterMinEl el ->
-            ( { model | minEl = el }, Effects.none )
-
-        A.FilterStartHour hr ->
-            ( { model | startHour = hr }, Effects.none )
-
-        A.FilterEndHour hr ->
-            ( { model | endHour = hr }, Effects.none )
-
-        A.FilterReset ->
-            ( { model
-                | satFilter = Nothing
-                , minEl = 30
-                , startHour = 6
-                , endHour = 22
-              }
+        Filter filterAction ->
+            ( { model | filter = PassFilter.update filterAction model.filter }
             , Effects.none
             )
 
@@ -116,55 +106,15 @@ view : Signal.Address Action -> Model -> Html
 view addr model =
     H.div
         [ HA.class "container" ]
-        [ H.div
-            [ HA.class "row"
-            , HA.style [("margin-top", "15px")]]
-            [ H.div
-                [ HA.class "col-xs-6" ]
-                [ Slider.view
-                    addr
-                    "Start hour"
-                    A.FilterStartHour
-                    0
-                    23
-                    model.startHour
-                ]
-            , H.div
-                [ HA.class "col-xs-6" ]
-                [ Slider.view
-                    addr
-                    "End hour"
-                    A.FilterEndHour
-                    0
-                    23
-                    model.endHour
-                ]
-            ]
-        , H.div
-            [ HA.class "row" ]
-            [ H.div
-                [ HA.class "col-xs-4" ]
-                [ Slider.view addr "Min El" A.FilterMinEl 30 89 model.minEl ]
-            , H.div
-                [ HA.class "col-xs-4" ]
-                [ SatSelect.view addr mySats ]
-            , H.div
-                [ HA.class "col-xs-4" ]
-                [ H.label [] []
-                , H.button
-                    [ HA.class "btn btn-primary"
-                    , HA.type' "submit"
-                    , HA.style [("display", "block"), ("width", "100%")]
-                    , Html.Events.onClick addr A.FilterReset
-                    ]
-                    [ H.text "Reset" ]
-                ]
-            ]
-        , PassTable.view model
+        [ PassFilter.view
+            (Signal.forwardTo addr Filter)
+            mySats
+            model.filter
+        , PassTable.view model.filter model.passes
         ]
 
 
--- tasks
+-- Tasks
 
 getPasses : List String -> Time -> Time -> Task a Action
 getPasses sats from duration =
@@ -173,4 +123,4 @@ getPasses sats from duration =
         |> (flip Task.andThen) (PassPredictor.getPasses sats from duration)
         |> Task.mapError (\msg -> "Could not calculate passes: " ++ msg)
         |> Task.toResult
-        |> Task.map A.Passes
+        |> Task.map Passes

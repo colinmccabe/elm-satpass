@@ -1,47 +1,37 @@
 module PassTable (view) where
 
 import Date exposing (Date)
+import PassFilter
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Model exposing (Model)
 import PassPredictor exposing (Pass)
 import String
 
 
-view : Model -> Html
-view model =
-    case model.passes of
-        Ok passes ->
-            passTable model passes
+view : PassFilter.Model -> Result String (List Pass) -> Html
+view filter passes =
+    case passes of
+        Ok allPasses ->
+            case List.filter (PassFilter.pred filter) allPasses of
+                [] ->
+                    div [] [ text "No passes to show" ]
+                filteredPasses ->
+                    passTable  filteredPasses
+
         Err msg ->
             div [] [ text msg ]
 
 
-passTable : Model -> List Pass -> Html
-passTable model passes =
-    let baseFilterFn pass =
-            let passHour = Date.hour pass.startTime
-            in
-                (passHour >= model.startHour)
-                    && (passHour <= model.endHour)
-                    && (pass.maxEl >= model.minEl)
-        filterFn =
-            case model.satFilter of
-                Nothing ->
-                    baseFilterFn
-                Just sat ->
-                    (\pass -> baseFilterFn pass && pass.satName == sat) 
-        filteredPasses =
-            passes |> List.filter filterFn
-    in
-        div
-            []
-            [ table
-                [ class "table table-striped" ]
-                [ tableHead
-                , tbody [] (List.map passRow filteredPasses)
-                ]
+passTable : List Pass -> Html
+passTable passes =
+    div
+        []
+        [ table
+            [ class "table table-striped" ]
+            [ tableHead
+            , tbody [] (List.map passRow passes)
             ]
+        ]
 
 
 tableHead : Html
@@ -92,7 +82,7 @@ showDay date =
 
 showTime : Date -> String
 showTime date =
-    let h = date |> Date.hour   |> toString
+    let h =  date |> Date.hour   |> toString
         mm = date |> Date.minute |> toString |> String.padLeft 2 '0'
     in
         h ++ ":" ++ mm
