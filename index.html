@@ -5,13 +5,24 @@
     <title>SatPass</title>
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <script type="text/javascript" src="js/satellite.min.js"></script>
+    <script type="text/javascript" src="js/predictor.js"></script>
     <script type="text/javascript" src="target/elm.js"></script>
 </head>
 <body>
 </body>
 <script type="text/javascript">
-    var app = Elm.fullscreen(Elm.SatPass, {initSignal: false});
+    var app = Elm.fullscreen(Elm.SatPass, {
+        initSignalIn: false,
+        passesIn : []
+    });
 
-    setTimeout(function(){ app.ports.initSignal.send(true); }, 0);
+    setTimeout(function () {
+        app.ports.initSignalIn.send(true);
+    }, 0);
+
+    app.ports.passReqOut.subscribe(function (passReq) {
+        var passes = Predictor.getPasses(passReq);
+        app.ports.passesIn.send(passes);
+    });
 </script>
 </html>

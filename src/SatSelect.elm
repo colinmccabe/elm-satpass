@@ -5,9 +5,10 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (on)
 import Json.Decode as JD
 import Signal exposing (Address)
+import Types exposing (SatName)
 
 
-view : Address a -> (Maybe String -> a) -> List String -> Html
+view : Address a -> (Maybe String -> a) -> List SatName -> Html
 view addr action sats =
     let toOption sat =
             option

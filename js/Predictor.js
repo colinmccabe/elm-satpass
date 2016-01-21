@@ -1,22 +1,11 @@
-Elm.Native.PassPredictor = {};
-Elm.Native.PassPredictor.make = function(localRuntime) {
+window.Predictor = (function() {
     'use strict';
 
-    localRuntime.Native = localRuntime.Native || {};
-    localRuntime.Native.PassPredictor = localRuntime.Native.PassPredictor || {};
-    if (localRuntime.Native.PassPredictor.values)
-    {
-        return localRuntime.Native.PassPredictor.values;
-    }
-
-    var Task = Elm.Native.Task.make(localRuntime);
-    var Utils = Elm.Native.Utils.make(localRuntime);
-
-    function toDegInt(rad) {
+    function toDegInt (rad) {
         return Math.round(rad * 57.2957795);
     }
 
-    function getLookAngle(satrec, observerGd, date) {
+    function getLookAngle (satrec, observerGd, date) {
         var positionAndVelocity = satellite.propagate(
             satrec,
             date.getUTCFullYear(),
@@ -42,7 +31,7 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
         return satellite.ecfToLookAngles(observerGd, positionEcf);
     }
 
-    function getNextPass(satrec, observerGd, searchBegin) {
+    function getNextPass (satrec, observerGd, searchBegin) {
         var date = new Date(searchBegin.getTime());
         var lookAngle = undefined;
 
@@ -89,8 +78,8 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
         };
     }
 
-    function getPassesForSat(tle, from, duration) {
-        var satrec = satellite.twoline2satrec(tle.line1, tle.line2);
+    function getPassesForSat (tleLine1, tleLine2, begin, duration) {
+        var satrec = satellite.twoline2satrec(tleLine1, tleLine2);
         var deg2rad = 0.0174532925;
 
         var observerGd = {
@@ -99,7 +88,7 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
             height: 0.0
         };
 
-        var searchBegin = new Date(from);
+        var searchBegin = new Date(begin);
         var searchEnd = new Date(searchBegin.getTime() + duration);
         var passes = [];
 
@@ -112,59 +101,33 @@ Elm.Native.PassPredictor.make = function(localRuntime) {
         return passes;
     }
 
-    function getPasses(elm_from, elm_duration, elm_tleMap) {
-        try {
-            var computationStart = (new Date()).getTime();
+    function getPasses (predictReq) {
+        var computationStart = (new Date()).getTime();
 
-            // Copy args from Elm
-            var from = Number(elm_from);
-            var duration = Number(elm_duration);
-            var tleMap = [];
+        var allPasses = [];
 
-            while (elm_tleMap.ctor !== '[]') {
-                var satName = String(elm_tleMap._0._0);
-                var tleLines = Object.assign({}, elm_tleMap._0._1);
+        predictReq.tles.map(function (tle) {
+            var passes = getPassesForSat(tle.line1, tle.line2,
+                            predictReq.begin, predictReq.duration);
 
-                tleMap.push([satName, tleLines]);
-
-                elm_tleMap = elm_tleMap._1;
-            }
-
-            // get predictions from satellite.js
-            var allPasses = [];
-
-            tleMap.map(function (sat) {
-                var tleLines = sat[1];
-                var passes = getPassesForSat(tleLines, from, duration);
-
-                passes = passes.map(function(pass) {
-                    pass.satName = sat[0];
-                    return pass;
-                });
-
-                allPasses = allPasses.concat(passes);
+            passes = passes.map(function (pass) {
+                pass.satName = tle.satName;
+                return pass;
             });
 
-            allPasses.sort(function(pass1, pass2) {
-                return pass1.startTime - pass2.startTime;
-            });
+            allPasses = allPasses.concat(passes);
+        });
 
-            // Copy results
-            var elm_allPasses = [];
+        allPasses.sort(function (pass1, pass2) {
+            return pass1.startTime - pass2.startTime;
+        });
 
-            allPasses.forEach(function (pass) {
-                elm_allPasses.push(Object.assign({}, pass));
-            });
+        console.log((new Date()).getTime() - computationStart);
 
-            console.log((new Date()).getTime() - computationStart);
-
-            return Task.succeed(Utils.list(elm_allPasses));
-        } catch (err) {
-            return Task.fail('' + err.message);
-        }
+        return allPasses;
     }
 
-    return localRuntime.Native.PassPredictor.values = {
-        getPasses: F3(getPasses)
+    return {
+        getPasses: getPasses
     };
-};
+})();

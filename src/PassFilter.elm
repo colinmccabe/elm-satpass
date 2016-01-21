@@ -1,34 +1,32 @@
-module PassFilter where
+module PassFilter (Model, Action, init, update, view, pred) where
 
 import Date
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
-import PassPredictor exposing (Pass)
+import Json.Decode as JD
 import SatSelect
 import Signal exposing (Address)
-import Slider
+import String
+import Types exposing (Deg, Pass, SatName)
 
 
-type alias Degrees = Int
-
-
-type alias HourOfDay = Int
+type alias Hour = Int
 
 
 type alias Model =
     { satName : Maybe String
-    , minEl : Degrees
-    , afterHour : HourOfDay
-    , beforeHour : HourOfDay
+    , minEl : Deg
+    , afterHour : Hour
+    , beforeHour : Hour
     }
 
 
 type Action
     = SatName (Maybe String)
-    | MinEl Degrees
-    | AfterHour HourOfDay
-    | BeforeHour HourOfDay
+    | MinEl Deg
+    | AfterHour Hour
+    | BeforeHour Hour
     | Reset
 
 
@@ -60,7 +58,7 @@ init =
     }
 
 
-view : Address Action -> List String -> Model -> Html
+view : Address Action -> List SatName -> Model -> Html
 view addr satList filter =
     H.div
         []
@@ -70,7 +68,7 @@ view addr satList filter =
             ]
             [ H.div
                 [ HA.class "col-xs-6" ]
-                [ Slider.view
+                [ slider
                     addr
                     "Start hour"
                     AfterHour
@@ -80,7 +78,7 @@ view addr satList filter =
                 ]
             , H.div
                 [ HA.class "col-xs-6" ]
-                [ Slider.view
+                [ slider
                     addr
                     "End hour"
                     BeforeHour
@@ -93,7 +91,7 @@ view addr satList filter =
             [ HA.class "row" ]
             [ H.div
                 [ HA.class "col-xs-4" ]
-                [ Slider.view
+                [ slider
                     addr
                     "Min El"
                     MinEl
@@ -117,6 +115,36 @@ view addr satList filter =
                 ]
             ]
         ]
+
+
+slider
+    : Signal.Address a
+    -> String
+    -> (Int -> a)
+    -> Int
+    -> Int
+    -> Int
+    -> Html
+slider addr title action min max currentVal =
+    let decodeEvent =
+            JD.customDecoder
+                ( JD.at ["target", "value"] JD.string )
+                ( String.toInt >> Result.map action )
+    in
+        H.div
+            [ HA.class "form-group" ]
+            [ H.label [] [ H.text title ]
+            , H.input
+                [ HA.type' "range"
+                , HA.min (toString min)
+                , HA.max (toString max)
+                , HA.step "1"
+                , HA.value (toString currentVal)
+                , Html.Events.on "input" decodeEvent (Signal.message addr)
+                ]
+                []
+            , H.text (toString currentVal)
+            ]
 
 
 pred : Model -> (Pass -> Bool)

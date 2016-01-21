@@ -4,22 +4,18 @@ import Date exposing (Date)
 import PassFilter
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import PassPredictor exposing (Pass)
 import String
+import Types exposing (Deg, Pass)
 
 
-view : PassFilter.Model -> Result String (List Pass) -> Html
-view filter passes =
-    case passes of
-        Ok allPasses ->
-            case List.filter (PassFilter.pred filter) allPasses of
-                [] ->
-                    div [] [ text "No passes to show" ]
-                filteredPasses ->
-                    passTable  filteredPasses
+view : PassFilter.Model -> List Pass -> Html
+view filter allPasses =
+    case List.filter (PassFilter.pred filter) allPasses of
+        [] ->
+            div [] [ text "No passes to show yet..." ]
 
-        Err msg ->
-            div [] [ text msg ]
+        filteredPasses ->
+            passTable filteredPasses
 
 
 passTable : List Pass -> Html
@@ -70,7 +66,7 @@ passRow pass =
             ]
 
 
-showDegrees : Int -> String
+showDegrees : Deg -> String
 showDegrees deg =
     toString deg ++ "°"
 
