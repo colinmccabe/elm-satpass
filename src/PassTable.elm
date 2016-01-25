@@ -36,8 +36,8 @@ tableHead =
         []
         [ tr
             []
-            [ th [] [text "Satellite"]
-            , th [] [text "Day"]
+            [ th [] [text "Day"]
+            , th [] [text "Satellite"]
             , th [] [text "Max El"]
             , th [] [text "Start"]
             , th [] [text "Apogee"]
@@ -50,13 +50,26 @@ tableHead =
 
 passRow : Pass -> Html
 passRow pass =
-    let td_ txt =
-            td [] [(text txt)]
+    let td_ str =
+            td [] [(text str)]
+
+        showDegrees deg =
+            toString deg ++ "°"
+
+        showDay date =
+            toString (Date.dayOfWeek date)
+
+        showTime date =
+            let h =  date |> Date.hour   |> toString
+                mm = date |> Date.minute |> toString |> String.padLeft 2 '0'
+            in
+                h ++ ":" ++ mm
+
     in
         tr
             []
-            [ td [] [ strong [] [text pass.satName] ]
-            , td_ (showDay pass.startTime)
+            [ td_ (showDay pass.startTime)
+            , td [] [ strong [] [text pass.satName] ]
             , td_ (showDegrees pass.maxEl)
             , td_ (showTime pass.startTime)
             , td_ (showTime pass.apogeeTime)
@@ -64,21 +77,3 @@ passRow pass =
             , td_ (showDegrees pass.startAz)
             , td_ (showDegrees pass.endAz)
             ]
-
-
-showDegrees : Deg -> String
-showDegrees deg =
-    toString deg ++ "°"
-
-
-showDay : Date -> String
-showDay date =
-    toString (Date.dayOfWeek date)
-
-
-showTime : Date -> String
-showTime date =
-    let h =  date |> Date.hour   |> toString
-        mm = date |> Date.minute |> toString |> String.padLeft 2 '0'
-    in
-        h ++ ":" ++ mm

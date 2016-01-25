@@ -5,7 +5,6 @@ import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
 import Json.Decode as JD
-import SatSelect
 import Signal exposing (Address)
 import String
 import Types exposing (Deg, Pass, SatName)
@@ -101,7 +100,7 @@ view addr satList filter =
                 ]
             , H.div
                 [ HA.class "col-xs-4" ]
-                [ SatSelect.view addr SatName satList ]
+                [ satSelect addr SatName satList ]
             , H.div
                 [ HA.class "col-xs-4" ]
                 [ H.label [] []
@@ -144,6 +143,33 @@ slider addr title action min max currentVal =
                 ]
                 []
             , H.text (toString currentVal)
+            ]
+
+
+satSelect : Address a -> (Maybe String -> a) -> List SatName -> Html
+satSelect addr action sats =
+    let toOption sat =
+            H.option
+                [ HA.value sat ]
+                [ H.text sat ]
+        optionValToAction val =
+            if val == "Any" then
+                action Nothing
+            else
+                action (Just val)
+        decodeEvent =
+            JD.customDecoder
+                ( JD.at ["target", "value"] JD.string )
+                ( optionValToAction >> Ok )
+    in
+        H.div
+            [ HA.class "form-group" ]
+            [ H.label [] [ H.text "Sat" ]
+            , H.select
+                [ HA.class "form-control"
+                , Html.Events.on "change" decodeEvent (Signal.message addr)
+                ]
+                ( List.map toOption ("Any" :: sats))
             ]
 
 
