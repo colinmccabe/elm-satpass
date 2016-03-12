@@ -1,4 +1,4 @@
-module SatPass where
+module Main where
 
 import Date exposing (Date)
 import Effects exposing (Effects)
@@ -60,7 +60,7 @@ update action model =
     case action of
         Init timestamp ->
             ( model
-            , Effects.task (requestPasses sats timestamp duration)
+            , Effects.task (getPasses sats timestamp duration)
             )
 
         Passes passes ->
@@ -104,7 +104,7 @@ app =
                 |> Time.timestamp
                 |> Signal.map (fst >> Init)
             , passesIn
-                |> Signal.map (List.map elmPass)
+                |> Signal.map (List.map toElmPass)
                 |> Signal.map Passes
             ]
         }
@@ -160,12 +160,14 @@ type alias JsPass =
     }
 
 
-requestPasses : List String -> Time -> Time -> Task a Action
-requestPasses sats begin duration =
-    Http.getString "nasabare.txt"
+getPasses : List String -> Time -> Time -> Task a Action
+getPasses sats begin duration =
+    Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt"
+        |> Task.map parseTle
+        |> Task.map (List.filter (\set -> List.member set.satName sats))
         |> Task.map
-            (\rawTle ->
-                { tles = tles rawTle sats
+            (\tles ->
+                { tles = tles
                 , begin = Time.inMilliseconds begin
                 , duration = Time.inMilliseconds duration
                 })
@@ -174,25 +176,24 @@ requestPasses sats begin duration =
         |> Task.map (\_ -> NoOp)
 
 
-tles : String -> List SatName -> List Tle
-tles rawTle desiredSats =
+parseTle : String -> List Tle
+parseTle rawTle =
     rawTle
         |> String.split "\n"
-        |> parseTleLines
-        |> List.filter (\tle -> List.member tle.satName desiredSats)
+        |> groupTleLines
 
 
-parseTleLines : List String -> List Tle
-parseTleLines lines =
+groupTleLines : List String -> List Tle
+groupTleLines lines =
     case lines of
         satName :: tle1 :: tle2 :: rest ->
-            {satName = satName, line1 = tle1, line2 = tle2} :: parseTleLines rest
+            {satName = satName, line1 = tle1, line2 = tle2} :: groupTleLines rest
         _ ->
             []
 
 
-elmPass : JsPass -> Pass
-elmPass nativePass =
+toElmPass : JsPass -> Pass
+toElmPass nativePass =
     let toDate jsTime =
             Date.fromTime (jsTime * Time.millisecond)
     in

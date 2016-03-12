@@ -1,0 +1,20 @@
+{
+  "name": "elm-satpass",
+  "version": "0.1.0",
+  "license": "BSD-3-Clause",
+  "private": true,
+  "scripts": {
+    "build": "webpack",
+    "watch": "webpack --watch",
+    "dev": "webpack-dev-server --port 3000"
+  },
+  "devDependencies": {
+      "elm-webpack-loader": "^2.0.1",
+      "file-loader": "^0.8.5",
+      "webpack": "^1.12.0",
+      "webpack-dev-server": "^1.14.0"
+  },
+  "dependencies": {
+    "satellite.js": "^1.2.0"
+  }
+}

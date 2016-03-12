@@ -1,5 +1,4 @@
 .DS_Store
-elm-stuff
-target
-css
-satellite.min.js
+/elm-stuff
+/dist
+/node_modules
