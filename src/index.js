@@ -7,29 +7,28 @@ var satellite = require('satellite.js');
 
 window.onload = function () {
     var app = Elm.fullscreen(Elm.Main, {
-        initSignalIn: false,
-        passesIn : []
+        startSignal: false,
+        passes : []
     });
 
     setTimeout(function () {
-        app.ports.initSignalIn.send(true);
+        app.ports.startSignal.send(true);
     }, 0);
 
-    app.ports.passReqOut.subscribe(function (passReq) {
-        var passes = getPasses(passReq);
-        app.ports.passesIn.send(passes);
+    app.ports.passReq.subscribe(function (passReq) {
+        app.ports.passes.send(getPasses(passReq));
     });
 };
 
 
-function getPasses (predictReq) {
+function getPasses (passReq) {
     var computationStart = (new Date()).getTime();
 
     var allPasses = [];
 
-    predictReq.tles.map(function (tle) {
+    passReq.tles.map(function (tle) {
         var passes = getPassesForSat(tle.line1, tle.line2,
-                        predictReq.begin, predictReq.duration);
+                                     passReq.begin, passReq.duration);
 
         passes = passes.map(function (pass) {
             pass.satName = tle.satName;

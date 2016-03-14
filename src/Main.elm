@@ -47,7 +47,7 @@ init =
 -- Action
 
 type Action
-    = Init Time
+    = Start Time
     | Passes (List Pass)
     | Filter PassFilter.Action
     | NoOp
@@ -58,9 +58,9 @@ type Action
 update : Action -> Model -> (Model, Effects Action)
 update action model =
     case action of
-        Init timestamp ->
+        Start timeNow ->
             ( model
-            , Effects.task (getPasses sats timestamp duration)
+            , Effects.task (getPasses sats timeNow duration)
             )
 
         Passes passes ->
@@ -100,10 +100,10 @@ app =
         , update = update
         , view = view
         , inputs =
-            [ initSignalIn
+            [ startSignal
                 |> Time.timestamp
-                |> Signal.map (fst >> Init)
-            , passesIn
+                |> Signal.map (fst >> Start)
+            , passes
                 |> Signal.map (List.map toElmPass)
                 |> Signal.map Passes
             ]
@@ -120,7 +120,7 @@ port tasks =
     app.tasks
 
 
-port initSignalIn : Signal Bool
+port startSignal : Signal Bool
 
 
 passReqMailbox : Signal.Mailbox PassReq
@@ -132,12 +132,12 @@ passReqMailbox =
         }
 
 
-port passReqOut : Signal PassReq
-port passReqOut =
+port passReq : Signal PassReq
+port passReq =
     passReqMailbox.signal
 
 
-port passesIn : Signal (List JsPass)
+port passes : Signal (List JsPass)
 
 
 -- Interop
