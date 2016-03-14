@@ -95,16 +95,16 @@ function getNextPass (satrec, observerGd, searchBegin) {
     var startAz = lookAngle.azimuth;
 
     // Step forward to pass end, record apogee
-    var maxEl = -1.0;
-    var apogeeTime = 0;
+    var maxEl = 0.0;
+    var apogeeTime = date.getTime();
 
     while (lookAngle.elevation > 0.0) {
         lookAngle = getLookAngle(satrec, observerGd, date);
-        date = new Date(date.getTime() + 1000);
         if (lookAngle.elevation > maxEl) {
             maxEl = lookAngle.elevation;
             apogeeTime = date.getTime();
         }
+        date = new Date(date.getTime() + 1000);
     }
 
     var endTime = date.getTime();
