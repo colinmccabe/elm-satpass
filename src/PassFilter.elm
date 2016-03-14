@@ -100,7 +100,7 @@ view addr satList filter =
                 ]
             , H.div
                 [ HA.class "col-xs-4" ]
-                [ satSelect addr SatName satList ]
+                [ satSelect addr satList ]
             , H.div
                 [ HA.class "col-xs-4" ]
                 [ H.label [] []
@@ -146,17 +146,17 @@ slider addr title action min max currentVal =
             ]
 
 
-satSelect : Address a -> (Maybe String -> a) -> List SatName -> Html
-satSelect addr action sats =
+satSelect : Address Action -> List SatName -> Html
+satSelect addr sats =
     let toOption sat =
             H.option
                 [ HA.value sat ]
                 [ H.text sat ]
         optionValToAction val =
             if val == "Any" then
-                action Nothing
+                SatName Nothing
             else
-                action (Just val)
+                SatName (Just val)
         decodeEvent =
             JD.customDecoder
                 ( JD.at ["target", "value"] JD.string )
