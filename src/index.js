@@ -16,18 +16,20 @@ window.onload = function () {
     }, 0);
 
     app.ports.passReq.subscribe(function (passReq) {
-        app.ports.passes.send(getPasses(passReq));
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            app.ports.passes.send(getPasses(passReq, pos.coords));
+        });
     });
 };
 
 
-function getPasses (passReq) {
+function getPasses (passReq, coords) {
     var computationStart = (new Date()).getTime();
 
     var allPasses = [];
 
     passReq.tles.map(function (tle) {
-        var passes = getPassesForSat(tle.line1, tle.line2,
+        var passes = getPassesForSat(coords, tle.line1, tle.line2,
                                      passReq.begin, passReq.duration);
 
         passes = passes.map(function (pass) {
@@ -48,13 +50,13 @@ function getPasses (passReq) {
 }
 
 
-function getPassesForSat (tleLine1, tleLine2, begin, duration) {
+function getPassesForSat (coords, tleLine1, tleLine2, begin, duration) {
     var satrec = satellite.twoline2satrec(tleLine1, tleLine2);
     var deg2rad = 0.0174532925;
 
     var observerGd = {
-        latitude: 41.9 * deg2rad,
-        longitude: -71.42 * deg2rad,
+        latitude: coords.latitude * deg2rad,
+        longitude: coords.longitude * deg2rad,
         height: 0.0
     };
 
