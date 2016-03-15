@@ -185,7 +185,7 @@ type alias JsPass =
 
 getPasses : List String -> Time -> Time -> Task a Action
 getPasses sats begin duration =
-  Http.getString "nasabare.txt"
+  Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt"
     |> Task.map parseTle
     |> Task.map (List.filter (\t -> List.member t.satName sats))
     |> Task.map

@@ -18,10 +18,15 @@ window.onload = function () {
     app.ports.passReq.subscribe(function (passReq) {
         navigator.geolocation.getCurrentPosition(function (pos) {
             app.ports.passes.send(getPasses(passReq, pos.coords));
-        });
+        }, undefined, geo_options);
     });
 };
 
+var geo_options = {
+    enableHighAccuracy: false,
+    maximumAge: 48 * 60 * 60 * 1000,  // 48 hours
+    timeout: 10000
+};
 
 function getPasses (passReq, coords) {
     var computationStart = (new Date()).getTime();
