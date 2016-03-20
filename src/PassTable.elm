@@ -51,33 +51,37 @@ tableHead =
 passRow : Pass -> Html
 passRow pass =
   let
-    td_ str =
+    td' str =
       td [] [ (text str) ]
 
     showDegrees deg =
       toString deg ++ "°"
 
-    showDay date =
-      toString (Date.dayOfWeek date)
+    showDay time =
+      time |> Date.fromTime |> Date.dayOfWeek |> toString
 
-    showTime date =
+    showTime time =
       let
         h =
-          date |> Date.hour |> toString
+          time |> Date.fromTime |> Date.hour |> toString
 
         mm =
-          date |> Date.minute |> toString |> String.padLeft 2 '0'
+          time
+            |> Date.fromTime
+            |> Date.minute
+            |> toString
+            |> String.padLeft 2 '0'
       in
         h ++ ":" ++ mm
   in
     tr
       []
-      [ td_ (showDay pass.startTime)
+      [ td' (showDay pass.startTime)
       , td [] [ strong [] [ text pass.satName ] ]
-      , td_ (showDegrees pass.maxEl)
-      , td_ (showTime pass.startTime)
-      , td_ (showTime pass.apogeeTime)
-      , td_ (showTime pass.endTime)
-      , td_ (showDegrees pass.startAz)
-      , td_ (showDegrees pass.endAz)
+      , td' (showDegrees pass.maxEl)
+      , td' (showTime pass.startTime)
+      , td' (showTime pass.apogeeTime)
+      , td' (showTime pass.endTime)
+      , td' (showDegrees pass.startAz)
+      , td' (showDegrees pass.endAz)
       ]

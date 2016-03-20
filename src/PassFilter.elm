@@ -175,8 +175,8 @@ pred : Model -> (Pass -> Bool)
 pred filter pass =
   List.all
     identity
-    [ Date.hour pass.startTime >= filter.afterHour
-    , Date.hour pass.startTime <= filter.beforeHour
+    [ Date.hour (Date.fromTime pass.startTime) >= filter.afterHour
+    , Date.hour (Date.fromTime pass.startTime) <= filter.beforeHour
     , pass.maxEl >= filter.minEl
     , filter.satName
         |> Maybe.map ((==) pass.satName)

@@ -1,6 +1,5 @@
 module Main (..) where
 
-import Date exposing (Date)
 import Effects exposing (Effects)
 import PassFilter
 import Html exposing (Html, div)
@@ -9,7 +8,6 @@ import Http
 import PassTable
 import Signal
 import StartApp
-import String
 import Task exposing (Task)
 import Time exposing (Time)
 import Types exposing (..)
@@ -38,46 +36,36 @@ sats =
   ]
 
 
-
--- Model
-
-
 type alias Model =
-  { passes : List Pass
+  { coords : Coords
+  , passes : List Pass
   , filter : PassFilter.Model
   }
 
 
 init : ( Model, Effects Action )
 init =
-  ( { passes = []
+  ( { coords = { latitude = 0.0, longitude = 0.0 }
+    , passes = []
     , filter = PassFilter.init
     }
   , Effects.none
   )
 
 
-
--- Action
-
-
 type Action
-  = Start Time
+  = Init ( Time, Coords )
   | Passes (List Pass)
   | Filter PassFilter.Action
   | NoOp
 
 
-
--- Update
-
-
 update : Action -> Model -> ( Model, Effects Action )
 update action model =
   case action of
-    Start timeNow ->
-      ( model
-      , Effects.task (getPasses sats timeNow duration)
+    Init ( time, coords ) ->
+      ( { model | coords = coords }
+      , Effects.task (getPasses coords time duration sats)
       )
 
     Passes passes ->
@@ -94,10 +82,6 @@ update action model =
       ( model, Effects.none )
 
 
-
--- View
-
-
 view : Signal.Address Action -> Model -> Html
 view addr model =
   div
@@ -111,7 +95,54 @@ view addr model =
 
 
 
--- Wiring
+-- Tasks
+
+
+getPasses : Coords -> Time -> Time -> List SatName -> Task a Action
+getPasses coords begin duration sats =
+  Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt"
+    |> Task.map parseTle
+    |> Task.map (List.filter (\t -> List.member t.satName sats))
+    |> Task.map
+        (\tles ->
+          { coords = coords
+          , begin = Time.inMilliseconds begin
+          , duration = Time.inMilliseconds duration
+          , tles = tles
+          }
+        )
+    |> (flip Task.andThen) (Signal.send passesOutMailbox.address)
+    |> Task.toResult
+    |> Task.map (\_ -> NoOp)
+
+
+
+-- Ports
+
+
+port initIn : Signal Coords
+
+
+passesOutMailbox : Signal.Mailbox PassReq
+passesOutMailbox =
+  Signal.mailbox
+    { coords = { latitude = 0.0, longitude = 0.0 }
+    , begin = 0
+    , duration = 0
+    , tles = []
+    }
+
+
+port passesOut : Signal PassReq
+port passesOut =
+  passesOutMailbox.signal
+
+
+port passesIn : Signal (List Pass)
+
+
+
+-- StartApp
 
 
 app : StartApp.App Model
@@ -121,11 +152,10 @@ app =
     , update = update
     , view = view
     , inputs =
-        [ startSignal
+        [ initIn
             |> Time.timestamp
-            |> Signal.map (fst >> Start)
-        , passes
-            |> Signal.map (List.map toElmPass)
+            |> Signal.map Init
+        , passesIn
             |> Signal.map Passes
         ]
     }
@@ -139,92 +169,3 @@ main =
 port tasks : Signal (Task.Task Effects.Never ())
 port tasks =
   app.tasks
-
-
-port startSignal : Signal Bool
-
-
-passReqMailbox : Signal.Mailbox PassReq
-passReqMailbox =
-  Signal.mailbox
-    { tles = []
-    , begin = 0
-    , duration = 0
-    }
-
-
-port passReq : Signal PassReq
-port passReq =
-  passReqMailbox.signal
-
-
-port passes : Signal (List JsPass)
-
-
-
--- Interop
-
-
-type alias PassReq =
-  { tles : List Tle
-  , begin : Float
-  , duration : Float
-  }
-
-
-type alias JsPass =
-  { satName : String
-  , maxEl : Int
-  , startTime : Float
-  , apogeeTime : Float
-  , endTime : Float
-  , startAz : Int
-  , endAz : Int
-  }
-
-
-getPasses : List String -> Time -> Time -> Task a Action
-getPasses sats begin duration =
-  Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt"
-    |> Task.map parseTle
-    |> Task.map (List.filter (\t -> List.member t.satName sats))
-    |> Task.map
-        (\tles ->
-          { tles = tles
-          , begin = Time.inMilliseconds begin
-          , duration = Time.inMilliseconds duration
-          }
-        )
-    |> (flip Task.andThen) (Signal.send passReqMailbox.address)
-    |> Task.toResult
-    |> Task.map (\_ -> NoOp)
-
-
-parseTle : String -> List Tle
-parseTle rawTle =
-  rawTle
-    |> String.split "\n"
-    |> groupTleLines
-
-
-groupTleLines : List String -> List Tle
-groupTleLines lines =
-  case lines of
-    satName :: tle1 :: tle2 :: rest ->
-      { satName = satName, line1 = tle1, line2 = tle2 } :: groupTleLines rest
-
-    _ ->
-      []
-
-
-toElmPass : JsPass -> Pass
-toElmPass nativePass =
-  let
-    toDate jsTime =
-      Date.fromTime (jsTime * Time.millisecond)
-  in
-    { nativePass
-      | startTime = toDate nativePass.startTime
-      , endTime = toDate nativePass.endTime
-      , apogeeTime = toDate nativePass.apogeeTime
-    }

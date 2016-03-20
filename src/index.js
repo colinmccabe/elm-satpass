@@ -7,20 +7,19 @@ var satellite = require('satellite.js');
 
 window.onload = function () {
     var app = Elm.fullscreen(Elm.Main, {
-        startSignal: false,
-        passes : []
+        initIn: {latitude: 0, longitude: 0},
+        passesIn : []
     });
 
-    setTimeout(function () {
-        app.ports.startSignal.send(true);
-    }, 0);
+    navigator.geolocation.getCurrentPosition(function (pos) {
+        app.ports.initIn.send(pos.coords);
+    }, undefined, geo_options);
 
-    app.ports.passReq.subscribe(function (passReq) {
-        navigator.geolocation.getCurrentPosition(function (pos) {
-            app.ports.passes.send(getPasses(passReq, pos.coords));
-        }, undefined, geo_options);
+    app.ports.passesOut.subscribe(function (passReq) {
+        app.ports.passesIn.send(getPasses(passReq));
     });
 };
+
 
 var geo_options = {
     enableHighAccuracy: false,
@@ -28,13 +27,14 @@ var geo_options = {
     timeout: 10000
 };
 
-function getPasses (passReq, coords) {
+
+function getPasses (passReq) {
     var computationStart = (new Date()).getTime();
 
     var allPasses = [];
 
     passReq.tles.map(function (tle) {
-        var passes = getPassesForSat(coords, tle.line1, tle.line2,
+        var passes = getPassesForSat(passReq.coords, tle.line1, tle.line2,
                                      passReq.begin, passReq.duration);
 
         passes = passes.map(function (pass) {
