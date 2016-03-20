@@ -1,5 +1,6 @@
 module Types (..) where
 
+import Dict exposing (Dict)
 import String
 import Time exposing (Time)
 
@@ -9,32 +10,32 @@ type alias SatName =
 
 
 type alias Deg =
-  Int
+  Float
 
 
 type alias Coords =
-  { latitude : Float
-  , longitude : Float
+  { latitude : Deg
+  , longitude : Deg
   }
 
 
 type alias Tle =
-  { satName : SatName
-  , line1 : String
+  { line1 : String
   , line2 : String
   }
 
 
 type alias PassReq =
   { coords : Coords
-  , begin : Float
-  , duration : Float
-  , tles : List Tle
+  , begin : Time
+  , duration : Time
+  , tles : List ( SatName, Tle )
   }
 
 
 type alias Pass =
-  { satName : SatName
+  { uid : String
+  , satName : SatName
   , maxEl : Deg
   , startTime : Time
   , apogeeTime : Time
@@ -44,18 +45,32 @@ type alias Pass =
   }
 
 
-parseTle : String -> List Tle
+type alias LookAngle =
+  { elevation : Deg
+  , azimuth : Deg
+  }
+
+
+type alias LookAngleReq =
+  { coords : Coords
+  , time : Time
+  , tles : List ( SatName, Tle )
+  }
+
+
+parseTle : String -> Dict SatName Tle
 parseTle rawTle =
   rawTle
     |> String.split "\n"
     |> groupTleLines
+    |> Dict.fromList
 
 
-groupTleLines : List String -> List Tle
+groupTleLines : List String -> List ( SatName, Tle )
 groupTleLines lines =
   case lines of
     satName :: tle1 :: tle2 :: rest ->
-      { satName = satName, line1 = tle1, line2 = tle2 } :: groupTleLines rest
+      ( satName, { line1 = tle1, line2 = tle2 } ) :: groupTleLines rest
 
     _ ->
       []

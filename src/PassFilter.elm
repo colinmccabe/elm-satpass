@@ -72,8 +72,7 @@ view addr satList filter =
                 addr
                 "Start hour"
                 AfterHour
-                0
-                23
+                ( 0, 1, 23 )
                 filter.afterHour
             ]
         , H.div
@@ -82,8 +81,7 @@ view addr satList filter =
                 addr
                 "End hour"
                 BeforeHour
-                0
-                23
+                ( 0, 1, 23 )
                 filter.beforeHour
             ]
         ]
@@ -94,10 +92,9 @@ view addr satList filter =
             [ slider
                 addr
                 "Min El"
-                MinEl
-                30
-                89
-                filter.minEl
+                (toFloat >> MinEl)
+                ( 30, 5, 89 )
+                (round filter.minEl)
             ]
         , H.div
             [ HA.class "col-xs-4" ]
@@ -117,8 +114,8 @@ view addr satList filter =
     ]
 
 
-slider : Signal.Address a -> String -> (Int -> a) -> Int -> Int -> Int -> Html
-slider addr title action min max currentVal =
+slider : Signal.Address a -> String -> (Int -> a) -> ( Int, Int, Int ) -> Int -> Html
+slider addr title action ( min, step, max ) currentVal =
   let
     decodeEvent =
       JD.customDecoder
@@ -132,7 +129,7 @@ slider addr title action min max currentVal =
           [ HA.type' "range"
           , HA.min (toString min)
           , HA.max (toString max)
-          , HA.step "1"
+          , HA.step (toString step)
           , HA.value (toString currentVal)
           , Html.Events.on "input" decodeEvent (Signal.message addr)
           ]

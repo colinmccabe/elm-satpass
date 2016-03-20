@@ -7,8 +7,9 @@ var satellite = require('satellite.js');
 
 window.onload = function () {
     var app = Elm.fullscreen(Elm.Main, {
-        initIn: {latitude: 0, longitude: 0},
-        passesIn : []
+        initIn: {latitude: 0.0, longitude: 0.0},
+        passesIn : [],
+        lookAngleIn : []
     });
 
     navigator.geolocation.getCurrentPosition(function (pos) {
@@ -17,6 +18,10 @@ window.onload = function () {
 
     app.ports.passesOut.subscribe(function (passReq) {
         app.ports.passesIn.send(getPasses(passReq));
+    });
+
+    app.ports.lookAngleOut.subscribe(function (lookAngleReq) {
+        app.ports.lookAngleIn.send(getEl(lookAngleReq));
     });
 };
 
@@ -28,17 +33,37 @@ var geo_options = {
 };
 
 
+function getEl (lookAngleReq) {
+    var els = [];
+
+    lookAngleReq.tles.map(function (tle) {
+        var satrec = satellite.twoline2satrec(tle[1].line1, tle[1].line2);
+        var gd = observerGd(lookAngleReq.coords);
+
+        var lookAngle = getLookAngle(satrec, gd, new Date(lookAngleReq.time));
+
+        els.push([tle[0], {
+            elevation: toDeg(lookAngle.elevation),
+            azimuth: toDeg(lookAngle.azimuth)
+        }]);
+    });
+
+    return els;
+}
+
+
 function getPasses (passReq) {
     var computationStart = (new Date()).getTime();
 
     var allPasses = [];
 
     passReq.tles.map(function (tle) {
-        var passes = getPassesForSat(passReq.coords, tle.line1, tle.line2,
+        var passes = getPassesForSat(passReq.coords, tle[1].line1, tle[1].line2,
                                      passReq.begin, passReq.duration);
 
         passes = passes.map(function (pass) {
-            pass.satName = tle.satName;
+            pass.satName = tle[0];
+            pass.uid = pass.satName + '_' + String(pass.startTime);
             return pass;
         });
 
@@ -57,20 +82,14 @@ function getPasses (passReq) {
 
 function getPassesForSat (coords, tleLine1, tleLine2, begin, duration) {
     var satrec = satellite.twoline2satrec(tleLine1, tleLine2);
-    var deg2rad = 0.0174532925;
-
-    var observerGd = {
-        latitude: coords.latitude * deg2rad,
-        longitude: coords.longitude * deg2rad,
-        height: 0.0
-    };
+    var gd = observerGd(coords);
 
     var searchBegin = new Date(begin);
     var searchEnd = new Date(searchBegin.getTime() + duration);
     var passes = [];
 
     while (searchBegin < searchEnd) {
-        var pass = getNextPass(satrec, observerGd, searchBegin);
+        var pass = getNextPass(satrec, gd, searchBegin);
         searchBegin = new Date(pass.endTime);
         passes.push(pass);
     }
@@ -117,12 +136,12 @@ function getNextPass (satrec, observerGd, searchBegin) {
     var endAz = lookAngle.azimuth;
 
     return {
-        maxEl: toDegInt(maxEl),
+        maxEl: toDeg(maxEl),
         startTime: startTime,
         apogeeTime: apogeeTime,
         endTime: endTime,
-        startAz: toDegInt(startAz),
-        endAz: toDegInt(endAz)
+        startAz: toDeg(startAz),
+        endAz: toDeg(endAz)
     };
 }
 
@@ -154,6 +173,19 @@ function getLookAngle (satrec, observerGd, date) {
 }
 
 
-function toDegInt (rad) {
-    return Math.round(rad * 57.2957795);
+function observerGd (coords) {
+    return {
+        latitude: toRad(coords.latitude),
+        longitude: toRad(coords.longitude),
+        height: 0.0
+    };
+}
+
+
+function toDeg (rad) {
+    return rad * 57.2957795;
+}
+
+function toRad (deg) {
+    return deg * 0.0174532925;
 }

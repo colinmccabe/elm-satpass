@@ -1,63 +1,62 @@
 module PassTable (view) where
 
 import Date exposing (Date)
-import PassFilter
+import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import String
-import Types exposing (Deg, Pass)
+import Time exposing (Time)
+import Types exposing (Deg, LookAngle, Pass, SatName)
 
 
-view : PassFilter.Model -> List Pass -> Html
-view filter allPasses =
-  case List.filter (PassFilter.pred filter) allPasses of
-    [] ->
-      div [] [ text "No passes to show yet..." ]
-
-    filteredPasses ->
-      passTable filteredPasses
-
-
-passTable : List Pass -> Html
-passTable passes =
+view : Time -> List Pass -> Dict SatName LookAngle -> Html
+view time passes lookAngles =
   div
     []
     [ table
-        [ class "table table-striped" ]
+        [ class "table"
+        , style [ ( "text-align", "center" ) ]
+        ]
         [ tableHead
-        , tbody [] (List.map passRow passes)
+        , tbody [] (List.map (passRow time lookAngles) passes)
         ]
     ]
 
 
 tableHead : Html
 tableHead =
-  thead
-    []
-    [ tr
-        []
-        [ th [] [ text "Day" ]
-        , th [] [ text "Satellite" ]
-        , th [] [ text "Max El" ]
-        , th [] [ text "Start" ]
-        , th [] [ text "Apogee" ]
-        , th [] [ text "End" ]
-        , th [] [ text "Start Az" ]
-        , th [] [ text "End Az" ]
-        ]
-    ]
+  let
+    th' txt =
+      th
+        [ style [ ( "text-align", "center" ) ] ]
+        [ text txt ]
+  in
+    thead
+      []
+      [ tr
+          []
+          [ th' "Day"
+          , th' "Satellite"
+          , th' "El"
+          , th' "Start"
+          , th' "Apogee"
+          , th' "End"
+          , th' "Start Az"
+          , th' "End Az"
+          ]
+      ]
 
 
-passRow : Pass -> Html
-passRow pass =
+passRow : Time -> Dict SatName LookAngle -> Pass -> Html
+passRow time lookAngles pass =
   let
     td' str =
       td [] [ (text str) ]
 
     showDegrees deg =
-      toString deg ++ "°"
+      deg |> round |> toString |> \s -> s ++ "°"
 
-    showDay time =
+    showDayOfWeek time =
       time |> Date.fromTime |> Date.dayOfWeek |> toString
 
     showTime time =
@@ -73,12 +72,35 @@ passRow pass =
             |> String.padLeft 2 '0'
       in
         h ++ ":" ++ mm
+
+    currentAngle =
+      Dict.get pass.uid lookAngles
+
+    elText =
+      case currentAngle of
+        Just { elevation, azimuth } ->
+          showDegrees elevation ++ " (" ++ showDegrees pass.maxEl ++ ")"
+
+        Nothing ->
+          showDegrees pass.maxEl
+
+    rowClass =
+      if time > pass.endTime then
+        "text-muted active"
+      else if currentAngle /= Nothing then
+        "info"
+      else if pass.maxEl >= 70 then
+        "danger"
+      else if pass.maxEl >= 50 then
+        "warning"
+      else
+        ""
   in
     tr
-      []
-      [ td' (showDay pass.startTime)
+      [ class rowClass ]
+      [ td' (showDayOfWeek pass.startTime)
       , td [] [ strong [] [ text pass.satName ] ]
-      , td' (showDegrees pass.maxEl)
+      , td' elText
       , td' (showTime pass.startTime)
       , td' (showTime pass.apogeeTime)
       , td' (showTime pass.endTime)
