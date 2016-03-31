@@ -54,7 +54,7 @@ passRow time lookAngles pass =
       td [] [ (text str) ]
 
     showDegrees deg =
-      deg |> round |> toString |> \s -> s ++ "°"
+      deg |> ceiling |> toString |> \s -> s ++ "°"
 
     showDayOfWeek time =
       time |> Date.fromTime |> Date.dayOfWeek |> toString
@@ -76,10 +76,20 @@ passRow time lookAngles pass =
     currentAngle =
       Dict.get pass.uid lookAngles
 
-    elText =
+    risingSettingArrow =
+      if time <= pass.apogeeTime then
+        "↑"
+      else
+        "↓"
+
+    el =
       case currentAngle of
         Just { elevation, azimuth } ->
-          showDegrees elevation ++ " (" ++ showDegrees pass.maxEl ++ ")"
+          showDegrees elevation
+            ++ " ("
+            ++ showDegrees pass.maxEl
+            ++ ") "
+            ++ risingSettingArrow
 
         Nothing ->
           showDegrees pass.maxEl
@@ -100,7 +110,7 @@ passRow time lookAngles pass =
       [ class rowClass ]
       [ td' (showDayOfWeek pass.startTime)
       , td [] [ strong [] [ text pass.satName ] ]
-      , td' elText
+      , td' el
       , td' (showTime pass.startTime)
       , td' (showTime pass.apogeeTime)
       , td' (showTime pass.endTime)

@@ -45,16 +45,16 @@ type alias Pass =
   }
 
 
-type alias LookAngle =
-  { elevation : Deg
-  , azimuth : Deg
-  }
-
-
 type alias LookAngleReq =
   { coords : Coords
   , time : Time
   , tles : List ( SatName, Tle )
+  }
+
+
+type alias LookAngle =
+  { elevation : Deg
+  , azimuth : Deg
   }
 
 

@@ -7,21 +7,21 @@ var satellite = require('satellite.js');
 
 window.onload = function () {
     var app = Elm.fullscreen(Elm.Main, {
-        initIn: {latitude: 0.0, longitude: 0.0},
-        passesIn : [],
-        lookAngleIn : []
+        init: {latitude: 0.0, longitude: 0.0},
+        passesResp : [],
+        lookAngleResp : []
     });
 
     navigator.geolocation.getCurrentPosition(function (pos) {
-        app.ports.initIn.send(pos.coords);
+        app.ports.init.send(pos.coords);
     }, undefined, geo_options);
 
-    app.ports.passesOut.subscribe(function (passReq) {
-        app.ports.passesIn.send(getPasses(passReq));
+    app.ports.passesReq.subscribe(function (passReq) {
+        app.ports.passesResp.send(getPasses(passReq));
     });
 
-    app.ports.lookAngleOut.subscribe(function (lookAngleReq) {
-        app.ports.lookAngleIn.send(getEl(lookAngleReq));
+    app.ports.lookAngleReq.subscribe(function (lookAngleReq) {
+        app.ports.lookAngleResp.send(getEl(lookAngleReq));
     });
 };
 

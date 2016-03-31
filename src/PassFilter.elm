@@ -54,7 +54,7 @@ init =
   { satName = Nothing
   , minEl = 30
   , afterHour = 6
-  , beforeHour = 18
+  , beforeHour = 19
   }
 
 
