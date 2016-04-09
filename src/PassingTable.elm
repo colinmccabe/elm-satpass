@@ -1,22 +1,31 @@
-module PassTable (view) where
+module PassingTable (view) where
 
-import Date exposing (Date)
+import Date
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import String
 import Time exposing (Time)
-import Satellite exposing (Deg, Pass, SatName)
+import Satellite exposing (..)
 
 
-view : Time -> List Pass -> Html
-view time passes =
-  table
-    [ class "table"
-    , style [ ( "text-align", "center" ) ]
-    ]
-    [ tableHead
-    , tbody [] (List.map (passRow time) passes)
-    ]
+view : Time -> List (LookAngle, Pass) -> Html
+view time lookAngles =
+  case lookAngles of
+    [] ->
+      div [] []
+
+    _ ->
+      div
+        []
+        [ h4 [] [ Html.text "Passing now" ]
+        , table
+            [ class "table"
+            , style [ ( "text-align", "center" ) ]
+            ]
+            [ tableHead
+            , tbody [] (List.map (passRow time) lookAngles)
+            ]
+        ]
 
 
 tableHead : Html
@@ -31,29 +40,26 @@ tableHead =
       []
       [ tr
           []
-          [ th' "Day"
-          , th' "Satellite"
-          , th' "Max El"
+          [ th' "Satellite"
+          , th' "El"
           , th' "Start"
           , th' "Apogee"
           , th' "End"
           , th' "Start Az"
+          , th' "Az"
           , th' "End Az"
           ]
       ]
 
 
-passRow : Time -> Pass -> Html
-passRow time pass =
+passRow : Time -> (LookAngle, Pass) -> Html
+passRow time (lookAngle, pass) =
   let
     td' str =
       td [] [ (text str) ]
 
     showDegrees deg =
       deg |> ceiling |> toString |> \s -> s ++ "°"
-
-    showDayOfWeek time =
-      time |> Date.fromTime |> Date.dayOfWeek |> toString
 
     showTime time =
       let
@@ -69,26 +75,30 @@ passRow time pass =
       in
         h ++ ":" ++ mm
 
-    rowClass =
-      if time > pass.endTime then
-        "text-muted active"
-      else if time > pass.startTime && time < pass.endTime then
-        "info"
-      else if pass.maxEl >= 70 then
-        "danger"
-      else if pass.maxEl >= 50 then
-        "warning"
+    risingSettingArrow =
+      if time <= pass.apogeeTime then
+        "↑"
       else
-        ""
+        "↓"
+
+    elText =
+      showDegrees lookAngle.elevation
+        ++ " ("
+        ++ showDegrees pass.maxEl
+        ++ ") "
+        ++ risingSettingArrow
+
+    rowClass =
+      "success"
   in
     tr
       [ class rowClass ]
-      [ td' (showDayOfWeek pass.startTime)
-      , td [] [ strong [] [ text pass.satName ] ]
-      , td' (showDegrees pass.maxEl)
+      [ td [] [ strong [] [ text pass.satName ] ]
+      , td' elText
       , td' (showTime pass.startTime)
       , td' (showTime pass.apogeeTime)
       , td' (showTime pass.endTime)
       , td' (showDegrees pass.startAz)
+      , td' (showDegrees lookAngle.azimuth)
       , td' (showDegrees pass.endAz)
       ]

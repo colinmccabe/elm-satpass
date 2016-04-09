@@ -1,0 +1,26 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>SatPass</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+    <script type="text/javascript" src="satellite.min.js"></script>
+    <script type="text/javascript" src="elm.js"></script>
+</head>
+<body></body>
+<script>
+  var geo_options = {
+    enableHighAccuracy: false,
+    maximumAge: 48 * 60 * 60 * 1000,  // 48 hours
+    timeout: 10000
+  };
+
+  var app = Elm.fullscreen(Elm.Main, {
+    init: {latitude: 0.0, longitude: 0.0}
+  });
+
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    app.ports.init.send(pos.coords);
+  }, undefined, geo_options);
+</script>
+</html>

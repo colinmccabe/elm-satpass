@@ -5,12 +5,16 @@
     },
     "globals": {
         "module": true,
-        "require": true
+        "require": true,
+        "satellite": true,
+        "Elm": true,
+        "F3": true,
+        "F4": true
     },
     "rules": {
         "indent": [
             1,
-            4
+            2
         ],
         "quotes": [
             1,

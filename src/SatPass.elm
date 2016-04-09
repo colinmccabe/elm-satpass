@@ -6,11 +6,12 @@ import PassFilter
 import Html exposing (Html, div)
 import Html.Attributes exposing (class)
 import Http
+import PassingTable
 import PassTable
+import Satellite exposing (..)
 import Signal
 import Task exposing (Task)
 import Time exposing (Time)
-import Types exposing (..)
 
 
 duration : Time
@@ -21,7 +22,6 @@ duration =
 sats : List String
 sats =
   [ "FO-29"
-  , "XW-2F"
   , "NO-44"
   , "SO-50"
   , "AO-73"
@@ -32,6 +32,7 @@ sats =
   , "XW-2B"
   , "XW-2C"
   , "XW-2D"
+  , "XW-2F"
   , "ISS"
   ]
 
@@ -43,7 +44,7 @@ type alias Model =
   , tles : Dict SatName Tle
   , passes : List Pass
   , filter : PassFilter.Model
-  , lookAngles : Dict SatName LookAngle
+  , lookAngles : List (LookAngle, Pass)
   }
 
 
@@ -55,7 +56,7 @@ init =
     , tles = Dict.empty
     , passes = []
     , filter = PassFilter.init
-    , lookAngles = Dict.empty
+    , lookAngles = []
     }
   , Effects.none
   )
@@ -64,21 +65,15 @@ init =
 type Action
   = Init ( Time, Coords )
   | Tle (Result String (Dict SatName Tle))
-  | Passes (List Pass)
+  | Passes (Result String (List Pass))
   | Filter PassFilter.Action
   | Tick Time
-  | LookAngles (List ( String, LookAngle ))
+  | LookAngles (List (LookAngle, Pass))
   | NoOp
 
 
-type alias Mailboxes =
-  { passesReq : Signal.Mailbox PassReq
-  , lookAngleReq : Signal.Mailbox LookAngleReq
-  }
-
-
-update : Mailboxes -> Action -> Model -> ( Model, Effects Action )
-update mailboxes action model =
+update : Action -> Model -> ( Model, Effects Action )
+update action model =
   case action of
     Init ( time, coords ) ->
       ( { model
@@ -90,18 +85,30 @@ update mailboxes action model =
       )
 
     Tle (Ok tles) ->
-      ( { model | tles = tles, status = "Trying to get passes..." }
-      , Effects.task
-          (getPasses mailboxes.passesReq model.coords tles (model.time - 1 * Time.hour) duration)
-      )
+      let
+        model' =
+          { model | tles = tles, status = "Trying to get passes..." }
+
+        begin =
+          model'.time - 1 * Time.hour
+      in
+        ( model'
+        , Effects.task
+            (getPasses model' begin duration)
+        )
 
     Tle (Err msg) ->
       ( { model | status = "Failed to get TLEs: " ++ msg }
       , Effects.none
       )
 
-    Passes passes ->
+    Passes (Ok passes) ->
       ( { model | passes = passes }
+      , Effects.none
+      )
+
+    Passes (Err _) ->
+      ( { model | status = "Failed to get passes" }
       , Effects.none
       )
 
@@ -112,24 +119,15 @@ update mailboxes action model =
 
     Tick time ->
       let
-        tlesOfSatsAboveHorizon =
-          model.passes
-            |> List.filter
-                (\pass ->
-                  time > pass.startTime && time < pass.endTime
-                )
-            |> List.filterMap
-                (\pass ->
-                  Dict.get pass.satName model.tles
-                    |> Maybe.map (\tle -> ( pass.uid, tle ))
-                )
+        model' =
+          { model | time = time }
       in
-        ( { model | time = time }
-        , Effects.task (getLookAngles mailboxes.lookAngleReq model.coords tlesOfSatsAboveHorizon time)
+        ( model'
+        , Effects.task (getLookAngles model')
         )
 
     LookAngles angles ->
-      ( { model | lookAngles = Dict.fromList angles }
+      ( { model | lookAngles = angles }
       , Effects.none
       )
 
@@ -146,7 +144,7 @@ view addr model =
           div [] [ Html.text model.status ]
 
         filteredPasses ->
-          PassTable.view model.time filteredPasses model.lookAngles
+          PassTable.view model.time filteredPasses
   in
     div
       [ class "container" ]
@@ -154,6 +152,8 @@ view addr model =
           (Signal.forwardTo addr Filter)
           sats
           model.filter
+      , PassingTable.view model.time model.lookAngles
+      , Html.h4 [] [ Html.text "Future passes" ]
       , passTable
       ]
 
@@ -173,24 +173,29 @@ getTles sats =
     |> Task.map Tle
 
 
-getPasses : Signal.Mailbox PassReq -> Coords -> Dict SatName Tle -> Time -> Time -> Task a Action
-getPasses mailbox coords tles begin duration =
+getPasses : Model -> Time -> Time -> Task a Action
+getPasses { coords, tles } begin duration =
+  Satellite.getPasses coords tles begin duration
+    |> Task.map Passes
+
+
+getLookAngles : Model -> Task a Action
+getLookAngles { time, coords, tles, passes } =
   let
-    passReq =
-      { coords = coords
-      , begin = Time.inMilliseconds begin
-      , duration = Time.inMilliseconds duration
-      , tles = Dict.toList tles
-      }
+    getLookAngle pass tle =
+      Satellite.getLookAngle coords tle time
+        |> Task.map (\result ->
+            case result of
+              Ok lookAngle ->
+                Just (lookAngle, pass)
+              _ ->
+                Nothing
+          )
   in
-    Signal.send mailbox.address passReq
-      |> Task.toResult
-      |> Task.map (\_ -> NoOp)
-
-
-getLookAngles : Signal.Mailbox LookAngleReq -> Coords -> List ( SatName, Tle ) -> Time -> Task a Action
-getLookAngles mailbox coords tles time =
-  { coords = coords, time = time, tles = tles }
-    |> Signal.send mailbox.address
-    |> Task.toResult
-    |> Task.map (\_ -> NoOp)
+    passes
+      |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
+      |> List.filterMap
+          (\pass -> Maybe.map (getLookAngle pass) (Dict.get pass.satName tles) )
+      |> Task.sequence
+      |> Task.map (List.filterMap identity)
+      |> Task.map LookAngles
