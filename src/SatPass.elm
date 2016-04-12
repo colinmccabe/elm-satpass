@@ -44,7 +44,7 @@ type alias Model =
   , tles : Dict SatName Tle
   , passes : List Pass
   , filter : PassFilter.Model
-  , lookAngles : List (LookAngle, Pass)
+  , lookAngles : List ( LookAngle, Pass )
   }
 
 
@@ -68,7 +68,7 @@ type Action
   | Passes (Result String (List Pass))
   | Filter PassFilter.Action
   | Tick Time
-  | LookAngles (List (LookAngle, Pass))
+  | LookAngles (List ( LookAngle, Pass ))
   | NoOp
 
 
@@ -166,7 +166,7 @@ getTles : List SatName -> Task a Action
 getTles sats =
   Http.getString "nasabare.txt"
     |> (flip Task.onError) (\_ -> Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt")
-    |> Task.map parseTle
+    |> Task.map (parseTle sats)
     |> Task.map (Dict.filter (\satName _ -> List.member satName sats))
     |> Task.mapError toString
     |> Task.toResult
@@ -184,18 +184,20 @@ getLookAngles { time, coords, tles, passes } =
   let
     getLookAngle pass tle =
       Satellite.getLookAngle coords tle time
-        |> Task.map (\result ->
-            case result of
-              Ok lookAngle ->
-                Just (lookAngle, pass)
-              _ ->
-                Nothing
-          )
+        |> Task.map
+            (\result ->
+              case result of
+                Ok lookAngle ->
+                  Just ( lookAngle, pass )
+
+                _ ->
+                  Nothing
+            )
   in
     passes
       |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
       |> List.filterMap
-          (\pass -> Maybe.map (getLookAngle pass) (Dict.get pass.satName tles) )
+          (\pass -> Maybe.map (getLookAngle pass) (Dict.get pass.satName tles))
       |> Task.sequence
       |> Task.map (List.filterMap identity)
       |> Task.map LookAngles

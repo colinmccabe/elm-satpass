@@ -54,7 +54,7 @@ init =
   { satName = Nothing
   , minEl = 30
   , afterHour = 6
-  , beforeHour = 19
+  , beforeHour = 20
   }
 
 
@@ -93,7 +93,7 @@ view addr satList filter =
                 addr
                 "Min El"
                 (toFloat >> MinEl)
-                ( 30, 5, 89 )
+                ( 5, 5, 89 )
                 (round filter.minEl)
             ]
         , H.div

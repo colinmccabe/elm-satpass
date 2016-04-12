@@ -166,8 +166,6 @@ var make = function(localRuntime) {
     var pvEcf = calcPositionAndVelocityEcf(satrec, date);
     var dopplerFactor = calcDopplerFactor(observerEcf, pvEcf.position, pvEcf.velocity);
 
-    console.log(dopplerFactor);
-
     return Task.succeed({
       elevation: toDeg(lookAngle.elevation),
       azimuth: toDeg(lookAngle.azimuth),

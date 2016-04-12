@@ -8,7 +8,7 @@ import Time exposing (Time)
 import Satellite exposing (..)
 
 
-view : Time -> List (LookAngle, Pass) -> Html
+view : Time -> List ( LookAngle, Pass ) -> Html
 view time lookAngles =
   case lookAngles of
     [] ->
@@ -52,8 +52,8 @@ tableHead =
       ]
 
 
-passRow : Time -> (LookAngle, Pass) -> Html
-passRow time (lookAngle, pass) =
+passRow : Time -> ( LookAngle, Pass ) -> Html
+passRow time ( lookAngle, pass ) =
   let
     td' str =
       td [] [ (text str) ]

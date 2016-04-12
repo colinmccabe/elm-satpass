@@ -48,6 +48,7 @@ type alias Pass =
 type alias LookAngle =
   { elevation : Deg
   , azimuth : Deg
+  , dopplerFactor : Float
   }
 
 
@@ -63,7 +64,7 @@ getPasses coords tles begin duration =
 
 getLookAngle : Coords -> Tle -> Time -> Task a (Result String LookAngle)
 getLookAngle coords tle time =
-  Native.Satellite.getLookAngle (encCoords coords) (encTle tle) (JE.float time)
+  Native.Satellite.getLookAngle (encCoords coords) (encTle tle) (encTime time)
     |> Task.map (JD.decodeValue decodeLookAngle)
 
 
@@ -95,6 +96,11 @@ encTle tle =
     ]
 
 
+encTime : Time -> JE.Value
+encTime time =
+  JE.float (time * Time.millisecond)
+
+
 decodePass : JD.Decoder Pass
 decodePass =
   JD.object8
@@ -112,38 +118,48 @@ decodePass =
     ("passId" := JD.string)
     ("satName" := JD.string)
     ("maxEl" := JD.float)
-    ("startTime" := JD.float)
-    ("apogeeTime" := JD.float)
-    ("endTime" := JD.float)
+    ("startTime" := decodeTime)
+    ("apogeeTime" := decodeTime)
+    ("endTime" := decodeTime)
     ("startAz" := JD.float)
     ("endAz" := JD.float)
 
 
 decodeLookAngle : JD.Decoder LookAngle
 decodeLookAngle =
-  JD.object2
-    (\elevation azimuth ->
+  JD.object3
+    (\elevation azimuth dopplerFactor ->
       { elevation = elevation
       , azimuth = azimuth
+      , dopplerFactor = dopplerFactor
       }
     )
     ("elevation" := JD.float)
     ("azimuth" := JD.float)
+    ("dopplerFactor" := JD.float)
 
 
-parseTle : String -> Dict SatName Tle
-parseTle rawTle =
+decodeTime : JD.Decoder Time
+decodeTime =
+  JD.float |> JD.map ((*) Time.millisecond)
+
+
+parseTle : List SatName -> String -> Dict SatName Tle
+parseTle sats rawTle =
   rawTle
     |> String.split "\n"
-    |> groupTleLines
+    |> groupTleLines sats
     |> Dict.fromList
 
 
-groupTleLines : List String -> List ( SatName, Tle )
-groupTleLines lines =
+groupTleLines : List SatName -> List String -> List ( SatName, Tle )
+groupTleLines sats lines =
   case lines of
     satName :: tle1 :: tle2 :: rest ->
-      ( satName, { line1 = tle1, line2 = tle2 } ) :: groupTleLines rest
+      if List.member satName sats then
+        ( satName, { line1 = tle1, line2 = tle2 } ) :: groupTleLines sats rest
+      else
+        groupTleLines sats rest
 
     _ ->
       []
