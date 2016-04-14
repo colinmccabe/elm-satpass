@@ -157,52 +157,57 @@ var make = function(localRuntime) {
 
 
   function getLookAngle (coords, tle, time) {
-    var gd = observerGd(coords);
-    var observerEcf = satellite.geodeticToEcf(gd);
-    var date = new Date(time);
+    try {
+      var gd = observerGd(coords);
+      var observerEcf = satellite.geodeticToEcf(gd);
+      var date = new Date(time);
 
-    var satrec = satellite.twoline2satrec(tle.line1, tle.line2);
-    var lookAngle = calcLookAngle(satrec, gd, date);
-    var pvEcf = calcPositionAndVelocityEcf(satrec, date);
-    var dopplerFactor = calcDopplerFactor(observerEcf, pvEcf.position, pvEcf.velocity);
+      var satrec = satellite.twoline2satrec(tle.line1, tle.line2);
+      var lookAngle = calcLookAngle(satrec, gd, date);
+      var pvEcf = calcPositionAndVelocityEcf(satrec, date);
+      var dopplerFactor = calcDopplerFactor(observerEcf, pvEcf.position, pvEcf.velocity);
 
-    return Task.succeed({
-      elevation: toDeg(lookAngle.elevation),
-      azimuth: toDeg(lookAngle.azimuth),
-      dopplerFactor: dopplerFactor
-    });
+      return Task.succeed({
+        elevation: toDeg(lookAngle.elevation),
+        azimuth: toDeg(lookAngle.azimuth),
+        dopplerFactor: dopplerFactor
+      });
+    } catch (e) {
+      return Task.fail(e.message);
+    }
   }
 
 
   function getPasses (coords, sats, begin, duration) {
-    var computationStart = (new Date()).getTime();
+    try {
+      var allPasses = [];
 
-    var allPasses = [];
+      sats.map(function (sat) {
+        var passes = passesForSat(coords, sat.tle.line1, sat.tle.line2,
+                                  begin, duration);
 
-    sats.map(function (sat) {
-      var passes = passesForSat(coords, sat.tle.line1, sat.tle.line2,
-                                begin, duration);
+        passes = passes.map(function (pass) {
+          pass.satName = sat.satName;
+          pass.passId = pass.satName + '_' + String(pass.startTime);
+          return pass;
+        });
 
-      passes = passes.map(function (pass) {
-        pass.satName = sat.satName;
-        pass.passId = pass.satName + '_' + String(pass.startTime);
-        return pass;
+        passes = passes.filter(function (pass) {
+          return pass.maxEl > 5.0;
+        });
+
+        allPasses = allPasses.concat(passes);
       });
 
-      passes = passes.filter(function (pass) {
-        return pass.maxEl > 5.0;
+      allPasses.sort(function (pass1, pass2) {
+        return pass1.startTime - pass2.startTime;
       });
 
-      allPasses = allPasses.concat(passes);
-    });
+      return Task.succeed(allPasses);
 
-    allPasses.sort(function (pass1, pass2) {
-      return pass1.startTime - pass2.startTime;
-    });
-
-    console.log((new Date()).getTime() - computationStart);
-
-    return Task.succeed(allPasses);
+    } catch (e) {
+      return Task.fail(e.message);
+    }
   }
 
   return localRuntime.Native.Satellite.values = {

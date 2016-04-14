@@ -167,7 +167,6 @@ getTles sats =
   Http.getString "nasabare.txt"
     |> (flip Task.onError) (\_ -> Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt")
     |> Task.map (parseTle sats)
-    |> Task.map (Dict.filter (\satName _ -> List.member satName sats))
     |> Task.mapError toString
     |> Task.toResult
     |> Task.map Tle
