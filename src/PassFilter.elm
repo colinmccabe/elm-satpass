@@ -15,7 +15,7 @@ type alias Hour =
 
 
 type alias Model =
-  { satName : Maybe String
+  { satName : String
   , minEl : Deg
   , afterHour : Hour
   , beforeHour : Hour
@@ -23,7 +23,7 @@ type alias Model =
 
 
 type Action
-  = SatName (Maybe String)
+  = SatName String
   | MinEl Deg
   | AfterHour Hour
   | BeforeHour Hour
@@ -51,7 +51,7 @@ update filterAction filter =
 
 init : Model
 init =
-  { satName = Nothing
+  { satName = ""
   , minEl = 30
   , afterHour = 6
   , beforeHour = 20
@@ -98,7 +98,7 @@ view addr satList filter =
             ]
         , H.div
             [ HA.class "col-xs-4" ]
-            [ satSelect addr satList ]
+            [ satNameFilter addr ]
         , H.div
             [ HA.class "col-xs-4" ]
             [ H.label [] []
@@ -138,34 +138,19 @@ slider addr title action ( min, step, max ) currentVal =
       ]
 
 
-satSelect : Address Action -> List SatName -> Html
-satSelect addr sats =
-  let
-    toOption sat =
-      H.option
-        [ HA.value sat ]
-        [ H.text sat ]
-
-    optionValToAction val =
-      if val == "Any" then
-        SatName Nothing
-      else
-        SatName (Just val)
-
-    decodeEvent =
-      JD.customDecoder
-        (JD.at [ "target", "value" ] JD.string)
-        (optionValToAction >> Ok)
-  in
-    H.div
-      [ HA.class "form-group" ]
-      [ H.label [] [ H.text "Sat" ]
-      , H.select
-          [ HA.class "form-control"
-          , Html.Events.on "change" decodeEvent (Signal.message addr)
-          ]
-          (List.map toOption ("Any" :: sats))
-      ]
+satNameFilter : Address Action -> Html
+satNameFilter addr =
+  H.div
+    [ HA.class "form-group" ]
+    [ H.label [] [ H.text "Satellite" ]
+    , H.input
+      [ HA.class "form-control"
+      , Html.Events.on
+        "input"
+        Html.Events.targetValue
+        (SatName >> Signal.message addr) ]
+      []
+    ]
 
 
 pred : Model -> (Pass -> Bool)
@@ -175,7 +160,5 @@ pred filter pass =
     [ Date.hour (Date.fromTime pass.startTime) >= filter.afterHour
     , Date.hour (Date.fromTime pass.startTime) <= filter.beforeHour
     , (ceiling pass.maxEl) >= (floor filter.minEl)
-    , filter.satName
-        |> Maybe.map ((==) pass.satName)
-        |> Maybe.withDefault True
+    , String.contains filter.satName pass.satName
     ]
