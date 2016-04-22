@@ -174,7 +174,7 @@ pred filter pass =
     identity
     [ Date.hour (Date.fromTime pass.startTime) >= filter.afterHour
     , Date.hour (Date.fromTime pass.startTime) <= filter.beforeHour
-    , pass.maxEl >= filter.minEl
+    , (ceiling pass.maxEl) >= (floor filter.minEl)
     , filter.satName
         |> Maybe.map ((==) pass.satName)
         |> Maybe.withDefault True

@@ -16,24 +16,29 @@ import Time exposing (Time)
 
 duration : Time
 duration =
-  48 * Time.hour
+  24 * Time.hour
 
 
-sats : List String
+sats : List SatName
 sats =
-  [ "FO-29"
+  [ "AO-85"
+  , "CO-55"
+  , "CO-57"
+  , "CO-58"
+  , "CO-65"
+  , "CO-66"
+  , "FO-29"
+  , "ISS"
+  , "LILACSAT-2"
   , "NO-44"
-  , "SO-50"
-  , "AO-73"
   , "NO-84"
-  , "AO-85"
-  , "RS-15"
+  , "SO-50"
+  , "UKUBE-1"
   , "XW-2A"
   , "XW-2B"
   , "XW-2C"
   , "XW-2D"
   , "XW-2F"
-  , "ISS"
   ]
 
 
