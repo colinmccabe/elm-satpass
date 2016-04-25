@@ -144,12 +144,13 @@ satNameFilter addr =
     [ HA.class "form-group" ]
     [ H.label [] [ H.text "Satellite" ]
     , H.input
-      [ HA.class "form-control"
-      , Html.Events.on
-        "input"
-        Html.Events.targetValue
-        (SatName >> Signal.message addr) ]
-      []
+        [ HA.class "form-control"
+        , Html.Events.on
+            "input"
+            Html.Events.targetValue
+            (SatName >> Signal.message addr)
+        ]
+        []
     ]
 
 
@@ -160,5 +161,7 @@ pred filter pass =
     [ Date.hour (Date.fromTime pass.startTime) >= filter.afterHour
     , Date.hour (Date.fromTime pass.startTime) <= filter.beforeHour
     , (ceiling pass.maxEl) >= (floor filter.minEl)
-    , String.contains filter.satName pass.satName
+    , String.contains
+        (String.toUpper filter.satName)
+        (String.toUpper pass.satName)
     ]

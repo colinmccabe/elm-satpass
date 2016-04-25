@@ -15,7 +15,7 @@
   };
 
   var app = Elm.fullscreen(Elm.Main, {
-    init: {latitude: 0.0, longitude: 0.0}
+    init: {latitude: 0.0, longitude: 0.0, altitude: 0.0}
   });
 
   navigator.geolocation.getCurrentPosition(function (pos) {

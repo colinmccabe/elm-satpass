@@ -56,7 +56,7 @@ type alias Model =
 init : ( Model, Effects Action )
 init =
   ( { status = "Trying to get location..."
-    , coords = { latitude = 0.0, longitude = 0.0 }
+    , coords = { latitude = 0.0, longitude = 0.0, altitude = 0.0 }
     , time = 0.0
     , tles = Dict.empty
     , passes = []
@@ -73,7 +73,7 @@ type Action
   | Passes (Result String (List Pass))
   | Filter PassFilter.Action
   | Tick Time
-  | LookAngles (List ( LookAngle, Pass ))
+  | LookAngles (Result String (List ( LookAngle, Pass )))
   | NoOp
 
 
@@ -108,7 +108,7 @@ update action model =
       )
 
     Passes (Ok passes) ->
-      ( { model | passes = passes }
+      ( { model | passes = passes, status = "No passes meet criteria" }
       , Effects.none
       )
 
@@ -131,10 +131,13 @@ update action model =
         , Effects.task (getLookAngles model')
         )
 
-    LookAngles angles ->
+    LookAngles (Ok angles) ->
       ( { model | lookAngles = angles }
       , Effects.none
       )
+
+    LookAngles (Err _) ->
+      ( model, Effects.none )
 
     NoOp ->
       ( model, Effects.none )
@@ -179,7 +182,16 @@ getTles sats =
 
 getPasses : Model -> Time -> Time -> Task a Action
 getPasses { coords, tles } begin duration =
-  Satellite.getPasses coords tles begin duration
+  tles
+    |> Dict.toList
+    |> List.map
+        (\( satName, tle ) ->
+          Satellite.getPasses coords satName tle begin duration
+        )
+    |> Task.sequence
+    |> Task.map List.concat
+    |> Task.map (List.sortBy .startTime)
+    |> Task.toResult
     |> Task.map Passes
 
 
@@ -188,20 +200,12 @@ getLookAngles { time, coords, tles, passes } =
   let
     getLookAngle pass tle =
       Satellite.getLookAngle coords tle time
-        |> Task.map
-            (\result ->
-              case result of
-                Ok lookAngle ->
-                  Just ( lookAngle, pass )
-
-                _ ->
-                  Nothing
-            )
+        |> Task.map (\lookAngle -> ( lookAngle, pass ))
   in
     passes
       |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
       |> List.filterMap
-          (\pass -> Maybe.map (getLookAngle pass) (Dict.get pass.satName tles))
+          (\pass -> Dict.get pass.satName tles |> Maybe.map (getLookAngle pass))
       |> Task.sequence
-      |> Task.map (List.filterMap identity)
+      |> Task.toResult
       |> Task.map LookAngles
