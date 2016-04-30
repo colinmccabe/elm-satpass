@@ -2,6 +2,7 @@ module Main (main) where
 
 import Effects
 import Html
+import LookAngleTable
 import SatPass
 import StartApp
 import Task
@@ -23,7 +24,9 @@ app =
             |> Time.timestamp
             |> Signal.map SatPass.Init
         , Time.every (1 * Time.second)
-            |> Signal.map SatPass.Tick
+            |> Signal.map SatPass.UpdateTime
+        , Time.every (1 * Time.second)
+            |> Signal.map (SatPass.LookAngleTable << LookAngleTable.GetLookAngles)
         ]
     }
 

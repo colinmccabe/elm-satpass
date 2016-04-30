@@ -1,12 +1,13 @@
-module SatPass (Model, init, Action(..), update, view) where
+module SatPass (Model, init, Action(Init, LookAngleTable, UpdateTime), update, view) where
 
 import Dict exposing (Dict)
 import Effects exposing (Effects)
 import PassFilter
-import Html exposing (Html, div)
-import Html.Attributes exposing (class)
+import Html as H exposing (Html)
+import Html.Attributes as HA
+import Html.Events
 import Http
-import PassingTable
+import LookAngleTable
 import PassTable
 import Satellite exposing (..)
 import Signal
@@ -16,7 +17,7 @@ import Time exposing (Time)
 
 duration : Time
 duration =
-  24 * Time.hour
+  16 * Time.hour
 
 
 sats : List SatName
@@ -48,8 +49,9 @@ type alias Model =
   , time : Time
   , tles : Dict SatName Tle
   , passes : List Pass
+  , loadedUpTo : Time
   , filter : PassFilter.Model
-  , lookAngles : List ( LookAngle, Pass )
+  , lookAngleTable : LookAngleTable.Model
   }
 
 
@@ -60,8 +62,9 @@ init =
     , time = 0.0
     , tles = Dict.empty
     , passes = []
+    , loadedUpTo = 0.0
     , filter = PassFilter.init
-    , lookAngles = []
+    , lookAngleTable = LookAngleTable.init
     }
   , Effects.none
   )
@@ -70,10 +73,12 @@ init =
 type Action
   = Init ( Time, Coords )
   | Tle (Result String (Dict SatName Tle))
-  | Passes (Result String (List Pass))
+  | Passes ( Time, List Pass )
+  | PassesFail String
   | Filter PassFilter.Action
-  | Tick Time
-  | LookAngles (Result String (List ( LookAngle, Pass )))
+  | UpdateTime Time
+  | LookAngleTable LookAngleTable.Action
+  | LoadMorePasses
   | NoOp
 
 
@@ -86,7 +91,7 @@ update action model =
           , time = time
           , status = "Trying to get TLEs..."
         }
-      , Effects.task (getTles sats)
+      , getTles sats
       )
 
     Tle (Ok tles) ->
@@ -98,8 +103,7 @@ update action model =
           model'.time - 1 * Time.hour
       in
         ( model'
-        , Effects.task
-            (getPasses model' begin duration)
+        , getPasses model' begin (begin + duration)
         )
 
     Tle (Err msg) ->
@@ -107,12 +111,16 @@ update action model =
       , Effects.none
       )
 
-    Passes (Ok passes) ->
-      ( { model | passes = passes, status = "No passes meet criteria" }
+    Passes ( endTime, newPasses ) ->
+      ( { model
+          | passes = model.passes ++ newPasses
+          , loadedUpTo = endTime
+          , status = "No passes meet criteria"
+        }
       , Effects.none
       )
 
-    Passes (Err _) ->
+    PassesFail _ ->
       ( { model | status = "Failed to get passes" }
       , Effects.none
       )
@@ -122,22 +130,24 @@ update action model =
       , Effects.none
       )
 
-    Tick time ->
-      let
-        model' =
-          { model | time = time }
-      in
-        ( model'
-        , Effects.task (getLookAngles model')
-        )
-
-    LookAngles (Ok angles) ->
-      ( { model | lookAngles = angles }
+    UpdateTime time ->
+      ( { model | time = time }
       , Effects.none
       )
 
-    LookAngles (Err _) ->
-      ( model, Effects.none )
+    LookAngleTable childAction ->
+      let
+        ( lookAngleModel, lookAngleEffects ) =
+          LookAngleTable.update model childAction model.lookAngleTable
+      in
+        ( { model | lookAngleTable = lookAngleModel }
+        , Effects.map LookAngleTable lookAngleEffects
+        )
+
+    LoadMorePasses ->
+      ( model
+      , getPasses model model.loadedUpTo (model.loadedUpTo + duration)
+      )
 
     NoOp ->
       ( model, Effects.none )
@@ -149,28 +159,48 @@ view addr model =
     passTable =
       case List.filter (PassFilter.pred model.filter) model.passes of
         [] ->
-          div [] [ Html.text model.status ]
+          H.div [] [ H.text model.status ]
 
         filteredPasses ->
           PassTable.view model.time filteredPasses
   in
-    div
-      [ class "container" ]
-      [ PassFilter.view
+    H.div
+      [ HA.class "container" ]
+      [ LookAngleTable.view model.time model.lookAngleTable
+      , H.div [ HA.style [ ( "height", "5px" ) ] ] []
+      , H.h3
+          [ HA.style [ ( "text-align", "center" ) ] ]
+          [ H.text "Future passes" ]
+      , PassFilter.view
           (Signal.forwardTo addr Filter)
           sats
           model.filter
-      , PassingTable.view model.time model.lookAngles
-      , Html.h4 [] [ Html.text "Future passes" ]
       , passTable
+      , loadMoreButton addr
       ]
 
 
+loadMoreButton : Signal.Address Action -> Html
+loadMoreButton addr =
+  H.div
+    [ HA.style
+        [ ( "text-align", "center" )
+        , ( "margin-bottom", "20px" )
+        ]
+    ]
+    [ H.button
+        [ HA.class "btn btn-primary"
+        , Html.Events.onClick addr LoadMorePasses
+        ]
+        [ H.text "Load more" ]
+    ]
 
--- Tasks
 
 
-getTles : List SatName -> Task a Action
+-- Effects
+
+
+getTles : List SatName -> Effects Action
 getTles sats =
   Http.getString "nasabare.txt"
     |> (flip Task.onError) (\_ -> Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt")
@@ -178,10 +208,11 @@ getTles sats =
     |> Task.mapError toString
     |> Task.toResult
     |> Task.map Tle
+    |> Effects.task
 
 
-getPasses : Model -> Time -> Time -> Task a Action
-getPasses { coords, tles } begin duration =
+getPasses : Model -> Time -> Time -> Effects Action
+getPasses { coords, tles } begin end =
   tles
     |> Dict.toList
     |> List.map
@@ -191,21 +222,7 @@ getPasses { coords, tles } begin duration =
     |> Task.sequence
     |> Task.map List.concat
     |> Task.map (List.sortBy .startTime)
-    |> Task.toResult
+    |> Task.map (\passes -> ( end, passes ))
     |> Task.map Passes
-
-
-getLookAngles : Model -> Task a Action
-getLookAngles { time, coords, tles, passes } =
-  let
-    getLookAngle pass tle =
-      Satellite.getLookAngle coords tle time
-        |> Task.map (\lookAngle -> ( lookAngle, pass ))
-  in
-    passes
-      |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
-      |> List.filterMap
-          (\pass -> Dict.get pass.satName tles |> Maybe.map (getLookAngle pass))
-      |> Task.sequence
-      |> Task.toResult
-      |> Task.map LookAngles
+    |> (flip Task.onError) (Task.succeed << PassesFail)
+    |> Effects.task

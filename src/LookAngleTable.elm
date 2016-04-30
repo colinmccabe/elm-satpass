@@ -1,14 +1,57 @@
-module PassingTable (view) where
+module LookAngleTable (Model, init, Action(GetLookAngles), update, view) where
 
 import Date
+import Dict exposing (Dict)
+import Effects exposing (Effects)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import String
+import Task exposing (Task)
 import Time exposing (Time)
 import Satellite exposing (..)
 
 
-view : Time -> List ( LookAngle, Pass ) -> Html
+type alias Model =
+  List ( Pass, LookAngle )
+
+
+init : Model
+init =
+  []
+
+
+type Action
+  = GetLookAngles Time
+  | LookAngles (List ( Pass, LookAngle ))
+  | Fail String
+
+
+type alias Context record =
+  { record
+    | coords : Coords
+    , tles : Dict String Tle
+    , passes : List Pass
+  }
+
+
+update : Context r -> Action -> Model -> ( Model, Effects Action )
+update context action model =
+  case action of
+    GetLookAngles time ->
+      ( model
+      , getLookAngles context time
+      )
+
+    LookAngles newLookAngles ->
+      ( newLookAngles
+      , Effects.none
+      )
+
+    Fail _ ->
+      ( model, Effects.none )
+
+
+view : Time -> Model -> Html
 view time lookAngles =
   case lookAngles of
     [] ->
@@ -17,7 +60,9 @@ view time lookAngles =
     _ ->
       div
         []
-        [ h4 [] [ Html.text "Passing now" ]
+        [ h3
+            [ style [ ( "text-align", "center" ) ] ]
+            [ Html.text "Passing now" ]
         , table
             [ class "table"
             , style [ ( "text-align", "center" ) ]
@@ -52,8 +97,8 @@ tableHead =
       ]
 
 
-passRow : Time -> ( LookAngle, Pass ) -> Html
-passRow time ( lookAngle, pass ) =
+passRow : Time -> ( Pass, LookAngle ) -> Html
+passRow time ( pass, lookAngle ) =
   let
     td' str =
       td [] [ (text str) ]
@@ -102,3 +147,24 @@ passRow time ( lookAngle, pass ) =
       , td' (showDegrees lookAngle.azimuth)
       , td' (showDegrees pass.endAz)
       ]
+
+
+
+-- Effects
+
+
+getLookAngles : Context r -> Time -> Effects Action
+getLookAngles { coords, tles, passes } time =
+  let
+    getLookAngle pass tle =
+      Satellite.getLookAngle coords tle time
+        |> Task.map (\lookAngle -> ( pass, lookAngle ))
+  in
+    passes
+      |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
+      |> List.filterMap
+          (\pass -> Dict.get pass.satName tles |> Maybe.map (getLookAngle pass))
+      |> Task.sequence
+      |> Task.map LookAngles
+      |> (flip Task.onError) (Task.succeed << Fail)
+      |> Effects.task
