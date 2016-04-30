@@ -1,11 +1,10 @@
-module PassFilter (Model, Action, init, update, view, pred) where
+module PassFilter exposing (Model, Msg, init, update, view, pred) -- where
 
 import Date
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
 import Json.Decode as JD
-import Signal exposing (Address)
 import String
 import Satellite exposing (Deg, Pass, SatName)
 
@@ -22,7 +21,7 @@ type alias Model =
   }
 
 
-type Action
+type Msg
   = SatName String
   | MinEl Deg
   | AfterHour Hour
@@ -30,20 +29,20 @@ type Action
   | Reset
 
 
-update : Action -> Model -> Model
-update filterAction filter =
-  case filterAction of
+update : Msg -> Model -> Model
+update msg model =
+  case msg of
     SatName satMay ->
-      { filter | satName = satMay }
+      { model | satName = satMay }
 
     MinEl el ->
-      { filter | minEl = el }
+      { model | minEl = el }
 
     AfterHour hr ->
-      { filter | afterHour = hr }
+      { model | afterHour = hr }
 
     BeforeHour hr ->
-      { filter | beforeHour = hr }
+      { model | beforeHour = hr }
 
     Reset ->
       init
@@ -58,8 +57,8 @@ init =
   }
 
 
-view : Address Action -> List SatName -> Model -> Html
-view addr satList filter =
+view : List SatName -> Model -> Html Msg
+view satList filter =
   H.div
     []
     [ H.div
@@ -69,7 +68,6 @@ view addr satList filter =
         [ H.div
             [ HA.class "col-xs-6" ]
             [ slider
-                addr
                 "Start hour"
                 AfterHour
                 ( 0, 1, 23 )
@@ -78,7 +76,6 @@ view addr satList filter =
         , H.div
             [ HA.class "col-xs-6" ]
             [ slider
-                addr
                 "End hour"
                 BeforeHour
                 ( 0, 1, 23 )
@@ -90,7 +87,6 @@ view addr satList filter =
         [ H.div
             [ HA.class "col-xs-4" ]
             [ slider
-                addr
                 "Min El"
                 (toFloat >> MinEl)
                 ( 5, 5, 89 )
@@ -98,7 +94,7 @@ view addr satList filter =
             ]
         , H.div
             [ HA.class "col-xs-4" ]
-            [ satNameFilter addr ]
+            [ satNameFilter ]
         , H.div
             [ HA.class "col-xs-4" ]
             [ H.label [] []
@@ -106,7 +102,7 @@ view addr satList filter =
                 [ HA.class "btn btn-primary"
                 , HA.type' "submit"
                 , HA.style [ ( "display", "block" ), ( "width", "100%" ) ]
-                , Html.Events.onClick addr Reset
+                , Html.Events.onClick Reset
                 ]
                 [ H.text "Reset" ]
             ]
@@ -114,8 +110,8 @@ view addr satList filter =
     ]
 
 
-slider : Signal.Address a -> String -> (Int -> a) -> ( Int, Int, Int ) -> Int -> Html
-slider addr title action ( min, step, max ) currentVal =
+slider : String -> (Int -> a) -> ( Int, Int, Int ) -> Int -> Html a
+slider title action ( min, step, max ) currentVal =
   let
     decodeEvent =
       JD.customDecoder
@@ -131,15 +127,15 @@ slider addr title action ( min, step, max ) currentVal =
           , HA.max (toString max)
           , HA.step (toString step)
           , HA.value (toString currentVal)
-          , Html.Events.on "input" decodeEvent (Signal.message addr)
+          , Html.Events.on "input" decodeEvent
           ]
           []
       , H.text (toString currentVal)
       ]
 
 
-satNameFilter : Address Action -> Html
-satNameFilter addr =
+satNameFilter : Html Msg
+satNameFilter =
   H.div
     [ HA.class "form-group" ]
     [ H.label [] [ H.text "Satellite" ]
@@ -147,8 +143,7 @@ satNameFilter addr =
         [ HA.class "form-control"
         , Html.Events.on
             "input"
-            Html.Events.targetValue
-            (SatName >> Signal.message addr)
+            (JD.map SatName Html.Events.targetValue)
         ]
         []
     ]

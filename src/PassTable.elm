@@ -1,4 +1,4 @@
-module PassTable (view) where
+module PassTable exposing (view) -- where
 
 import Date exposing (Date)
 import Html exposing (..)
@@ -8,7 +8,7 @@ import Time exposing (Time)
 import Satellite exposing (Deg, Pass, SatName)
 
 
-view : Time -> List Pass -> Html
+view : Time -> List Pass -> Html a
 view time passes =
   table
     [ class "table"
@@ -19,7 +19,7 @@ view time passes =
     ]
 
 
-tableHead : Html
+tableHead : Html a
 tableHead =
   let
     th' txt =
@@ -43,7 +43,7 @@ tableHead =
       ]
 
 
-passRow : Time -> Pass -> Html
+passRow : Time -> Pass -> Html a
 passRow time pass =
   let
     td' str =

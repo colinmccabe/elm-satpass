@@ -1,8 +1,7 @@
-module LookAngleTable (Model, init, Action(GetLookAngles), update, view) where
+module LookAngleTable exposing (Model, init, Msg, update, view, subs) -- where
 
 import Date
 import Dict exposing (Dict)
-import Effects exposing (Effects)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import String
@@ -20,21 +19,21 @@ init =
   []
 
 
-type Action
+type Msg
   = GetLookAngles Time
   | LookAngles (List ( Pass, LookAngle ))
   | Fail String
 
 
-type alias Context record =
-  { record
+type alias Context a =
+  { a
     | coords : Coords
     , tles : Dict String Tle
     , passes : List Pass
   }
 
 
-update : Context r -> Action -> Model -> ( Model, Effects Action )
+update : Context a -> Msg -> Model -> ( Model, Cmd Msg )
 update context action model =
   case action of
     GetLookAngles time ->
@@ -44,14 +43,14 @@ update context action model =
 
     LookAngles newLookAngles ->
       ( newLookAngles
-      , Effects.none
+      , Cmd.none
       )
 
     Fail _ ->
-      ( model, Effects.none )
+      ( model, Cmd.none )
 
 
-view : Time -> Model -> Html
+view : Time -> Model -> Html a
 view time lookAngles =
   case lookAngles of
     [] ->
@@ -73,7 +72,7 @@ view time lookAngles =
         ]
 
 
-tableHead : Html
+tableHead : Html a
 tableHead =
   let
     th' txt =
@@ -97,7 +96,7 @@ tableHead =
       ]
 
 
-passRow : Time -> ( Pass, LookAngle ) -> Html
+passRow : Time -> ( Pass, LookAngle ) -> Html a
 passRow time ( pass, lookAngle ) =
   let
     td' str =
@@ -149,11 +148,18 @@ passRow time ( pass, lookAngle ) =
       ]
 
 
+-- Subscriptions
 
--- Effects
+
+subs : Model -> Sub Msg
+subs model =
+  Time.every Time.second GetLookAngles
 
 
-getLookAngles : Context r -> Time -> Effects Action
+-- Cmds
+
+
+getLookAngles : Context r -> Time -> Cmd Msg
 getLookAngles { coords, tles, passes } time =
   let
     getLookAngle pass tle =
@@ -165,6 +171,4 @@ getLookAngles { coords, tles, passes } time =
       |> List.filterMap
           (\pass -> Dict.get pass.satName tles |> Maybe.map (getLookAngle pass))
       |> Task.sequence
-      |> Task.map LookAngles
-      |> (flip Task.onError) (Task.succeed << Fail)
-      |> Effects.task
+      |> Task.perform Fail LookAngles
