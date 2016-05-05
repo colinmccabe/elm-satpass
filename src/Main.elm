@@ -1,4 +1,4 @@
-port module Main exposing (main) -- where
+port module Main exposing (main)
 
 import Dict exposing (Dict)
 import PassFilter

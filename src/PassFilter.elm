@@ -1,4 +1,4 @@
-module PassFilter exposing (Model, Msg, init, update, view, pred) -- where
+module PassFilter exposing (Model, Msg, init, update, view, pred)
 
 import Date
 import Html as H exposing (Html)

@@ -1,4 +1,4 @@
-module LookAngleTable exposing (Model, init, Msg, update, view, subs) -- where
+module LookAngleTable exposing (Model, init, Msg, update, view, subs)
 
 import Date
 import Dict exposing (Dict)

@@ -1,4 +1,4 @@
-module PassTable exposing (view) -- where
+module PassTable exposing (view)
 
 import Date exposing (Date)
 import Html exposing (..)
