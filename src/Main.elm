@@ -67,7 +67,7 @@ type alias Model =
 init : ( Model, Cmd Msg )
 init =
     ( { status = "Trying to get location..."
-      , coords = { latitude = 0.0, longitude = 0.0, altitude = 0.0 }
+      , coords = { latitude = 0.0, longitude = 0.0, altitude = Nothing }
       , time = 0.0
       , tles = Dict.empty
       , passes = []
