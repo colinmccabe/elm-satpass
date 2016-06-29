@@ -1,8 +1,15 @@
-all: elm-make
-	cp elm.js index.html sat-predict.js ~/htdocs/sat/
+DEST=dest
 
-elm-make:
-	elm make --output elm.js src/Main.elm
+all: build
+
+htdocs: build
+	cp $(DEST)/* ~/htdocs/sat/
+
+build:
+	mkdir -p $(DEST)
+	cp src/js/* $(DEST)
+	cp src/index.html $(DEST)
+	elm make --output $(DEST)/elm.js src/elm/Main.elm
 
 clean:
-	rm elm.js
+	rm -r $(DEST)
