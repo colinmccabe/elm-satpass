@@ -5,6 +5,7 @@
     <title>SatPass</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
     <script type="text/javascript" src="satellite.min.js"></script>
+    <script type="text/javascript" src="sat-predict.js"></script>
     <script type="text/javascript" src="elm.js"></script>
 </head>
 <body></body>
@@ -18,7 +19,15 @@
 
   navigator.geolocation.getCurrentPosition(function (pos) {
     var timestamp = (new Date()).getTime();
-    app.ports.timeAndCoords.send([timestamp, pos.coords]);
+    app.ports.recvTimeAndCoords.send([timestamp, pos.coords]);
   }, undefined, geo_options);
+
+  app.ports.sendPassReq.subscribe(function (req) {
+      app.ports.recvPasses.send(SatPredict.getPasses(req));
+  });
+
+  app.ports.sendLookAngleReq.subscribe(function (req) {
+      app.ports.recvLookAngles.send(SatPredict.getLookAngles(req));
+  });
 </script>
 </html>

@@ -6,7 +6,7 @@ import Html.Attributes as HA
 import Html.Events
 import Json.Decode as JD
 import String
-import Satellite exposing (Deg, Pass, SatName)
+import Types exposing (..)
 
 
 type alias Hour =

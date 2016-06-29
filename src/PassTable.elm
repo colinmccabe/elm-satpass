@@ -5,18 +5,22 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import String
 import Time exposing (Time)
-import Satellite exposing (Deg, Pass, SatName)
+import Types exposing (..)
 
 
 view : Time -> List Pass -> Html a
 view time passes =
-    table
-        [ class "table"
-        , style [ ( "text-align", "center" ) ]
-        ]
-        [ tableHead
-        , tbody [] (List.map (passRow time) passes)
-        ]
+    let
+        sortedPasses =
+            List.sortBy .startTime passes
+    in
+        table
+            [ class "table"
+            , style [ ( "text-align", "center" ) ]
+            ]
+            [ tableHead
+            , tbody [] (List.map (passRow time) sortedPasses)
+            ]
 
 
 tableHead : Html a

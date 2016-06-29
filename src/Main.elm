@@ -9,9 +9,9 @@ import Html.Events
 import Http
 import LookAngleTable
 import PassTable
-import Satellite exposing (..)
 import Task exposing (Task)
 import Time exposing (Time)
+import Types exposing (..)
 
 
 duration : Time
@@ -57,7 +57,7 @@ type alias Model =
     , coords : Coords
     , time : Time
     , tles : Dict SatName Tle
-    , passes : List Pass
+    , passes : Dict PassId Pass
     , loadedUpTo : Time
     , filter : PassFilter.Model
     , lookAngleTable : LookAngleTable.Model
@@ -70,7 +70,7 @@ init =
       , coords = { latitude = 0.0, longitude = 0.0, altitude = Nothing }
       , time = 0.0
       , tles = Dict.empty
-      , passes = []
+      , passes = Dict.empty
       , loadedUpTo = 0.0
       , filter = PassFilter.init
       , lookAngleTable = LookAngleTable.init
@@ -80,9 +80,9 @@ init =
 
 
 type Msg
-    = Init ( Time, Coords )
+    = TimeAndCoords ( Time, Coords )
     | Tle (Dict SatName Tle)
-    | Passes Time (List Pass)
+    | Passes ( Time, List Pass )
     | Filter PassFilter.Msg
     | Tick Time
     | LookAngleTable LookAngleTable.Msg
@@ -103,32 +103,51 @@ getTles sats =
         |> Task.perform Fail Tle
 
 
-getPasses : Model -> Time -> Time -> Cmd Msg
-getPasses { coords, tles } begin end =
+type alias PassReq =
+    { coords : Coords
+    , begin : Time
+    , end : Time
+    , sats : List { satName : SatName, tle : Tle }
+    }
+
+
+port sendPassReq : PassReq -> Cmd msg
+
+
+nextPassReq : Model -> PassReq
+nextPassReq { coords, tles, loadedUpTo } =
     tles
         |> Dict.toList
         |> List.map
             (\( satName, tle ) ->
-                Satellite.getPasses coords satName tle begin duration
+                { satName = satName
+                , tle = tle
+                }
             )
-        |> Task.sequence
-        |> Task.map List.concat
-        |> Task.map (List.sortBy .startTime)
-        |> Task.mapError toString
-        |> Task.perform Fail (Passes end)
+        |> (\sats ->
+                { coords = coords
+                , begin = loadedUpTo
+                , end = loadedUpTo + duration
+                , sats = sats
+                }
+           )
 
 
 
 -- Subs
 
 
-port timeAndCoords : (( Time, Satellite.Coords ) -> msg) -> Sub msg
+port recvTimeAndCoords : (( Time, Coords ) -> msg) -> Sub msg
+
+
+port recvPasses : (( Time, List Pass ) -> msg) -> Sub msg
 
 
 subs : Model -> Sub Msg
 subs model =
     Sub.batch
-        [ timeAndCoords Init
+        [ recvTimeAndCoords TimeAndCoords
+        , recvPasses Passes
         , Time.every Time.second Tick
         , Sub.map LookAngleTable (LookAngleTable.subs model.lookAngleTable)
         ]
@@ -141,10 +160,11 @@ subs model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update action model =
     case action of
-        Init ( time, coords ) ->
+        TimeAndCoords ( time, coords ) ->
             ( { model
                 | coords = coords
                 , time = time
+                , loadedUpTo = time - 1 * Time.hour
                 , status = "Trying to get TLEs..."
               }
             , getTles sats
@@ -154,22 +174,25 @@ update action model =
             let
                 model' =
                     { model | tles = tles, status = "Trying to get passes..." }
-
-                begin =
-                    model'.time - 1 * Time.hour
             in
                 ( model'
-                , getPasses model' begin (begin + duration)
+                , sendPassReq (nextPassReq model')
                 )
 
-        Passes endTime newPasses ->
-            ( { model
-                | passes = model.passes ++ newPasses
-                , loadedUpTo = endTime
-                , status = "No passes meet criteria"
-              }
-            , Cmd.none
-            )
+        Passes ( endTime, newPasses ) ->
+            let
+                newPassesDict =
+                    newPasses
+                        |> List.map (\pass -> ( pass.passId, pass ))
+                        |> Dict.fromList
+            in
+                ( { model
+                    | passes = Dict.union model.passes newPassesDict
+                    , loadedUpTo = endTime
+                    , status = "No passes meet criteria"
+                  }
+                , Cmd.none
+                )
 
         Filter action ->
             ( { model | filter = PassFilter.update action model.filter }
@@ -192,7 +215,7 @@ update action model =
 
         LoadMorePasses ->
             ( model
-            , getPasses model model.loadedUpTo (model.loadedUpTo + duration)
+            , sendPassReq (nextPassReq model)
             )
 
         Fail msg ->
@@ -208,16 +231,22 @@ update action model =
 view : Model -> Html Msg
 view model =
     let
+        filteredPasses =
+            model.passes
+                |> Dict.toList
+                |> List.map snd
+                |> List.filter (PassFilter.pred model.filter)
+
         passTable =
-            case List.filter (PassFilter.pred model.filter) model.passes of
+            case filteredPasses of
                 [] ->
                     H.div [] [ H.text model.status ]
 
-                filteredPasses ->
+                _ ->
                     PassTable.view model.time filteredPasses
     in
         H.div [ HA.class "container" ]
-            [ LookAngleTable.view model.time model.lookAngleTable
+            [ LookAngleTable.view model.time model.passes model.lookAngleTable
             , H.div [ HA.style [ ( "height", "5px" ) ] ] []
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Future passes" ]

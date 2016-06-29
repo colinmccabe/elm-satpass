@@ -1,112 +1,152 @@
-module LookAngleTable exposing (Model, init, Msg, update, view, subs)
+port module LookAngleTable
+    exposing
+        ( Model
+        , init
+        , Msg
+        , update
+        , view
+        , subs
+        )
 
 import Date
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Platform.Cmd exposing (Cmd)
 import String
-import Task exposing (Task)
 import Time exposing (Time)
-import Satellite exposing (..)
+import Types exposing (..)
+
+
+type alias LookAngle =
+    { passId : PassId
+    , elevation : Deg
+    , azimuth : Deg
+    , dopplerFactor : Float
+    }
+
+
+type alias ParentModel a =
+    { a
+        | coords : Coords
+        , tles : Dict String Tle
+        , passes : Dict PassId Pass
+    }
 
 
 type alias Model =
-    List ( Pass, LookAngle )
+    Dict PassId LookAngle
 
 
 init : Model
 init =
-    []
+    Dict.empty
 
 
 type Msg
-    = GetLookAngles Time
-    | LookAngles (List ( Pass, LookAngle ))
-    | Fail String
-
-
-
--- Context
-
-
-type alias Context a =
-    { a
-        | coords : Coords
-        , tles : Dict String Tle
-        , passes : List Pass
-    }
+    = Tick Time
+    | LookAngles (List LookAngle)
 
 
 
 -- Cmds
 
 
-getLookAngles : Context r -> Time -> Cmd Msg
-getLookAngles { coords, tles, passes } time =
+type alias LookAngleReq =
+    { time : Time
+    , coords : Coords
+    , sats : List { passId : PassId, tle : Tle }
+    }
+
+
+port sendLookAngleReq : LookAngleReq -> Cmd msg
+
+
+nextReq : ParentModel r -> Time -> LookAngleReq
+nextReq { coords, tles, passes } time =
     let
-        getLookAngle pass tle =
-            Satellite.getLookAngle coords tle time
-                |> Task.map (\lookAngle -> ( pass, lookAngle ))
+        idTleRecord pass =
+            Dict.get pass.satName tles
+                |> Maybe.map (\tle -> { passId = pass.passId, tle = tle })
     in
         passes
+            |> Dict.toList
+            |> List.map snd
             |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
-            |> List.filterMap (\pass -> Dict.get pass.satName tles |> Maybe.map (getLookAngle pass))
-            |> Task.sequence
-            |> Task.perform Fail LookAngles
+            |> List.filterMap idTleRecord
+            |> (\sats -> { time = time, coords = coords, sats = sats })
 
 
 
 -- Subs
 
 
+port recvLookAngles : (List LookAngle -> msg) -> Sub msg
+
+
 subs : Model -> Sub Msg
 subs model =
-    Time.every Time.second GetLookAngles
+    Sub.batch
+        [ Time.every Time.second Tick
+        , recvLookAngles LookAngles
+        ]
 
 
 
 -- Update
 
 
-update : Context a -> Msg -> Model -> ( Model, Cmd Msg )
-update context action model =
+update : ParentModel a -> Msg -> Model -> ( Model, Cmd Msg )
+update parentModel action model =
     case action of
-        GetLookAngles time ->
+        Tick time ->
             ( model
-            , getLookAngles context time
+            , sendLookAngleReq (nextReq parentModel time)
             )
 
-        LookAngles newLookAngles ->
-            ( newLookAngles
-            , Cmd.none
-            )
-
-        Fail _ ->
-            ( model, Cmd.none )
+        LookAngles lookAngles ->
+            let
+                newModel =
+                    lookAngles
+                        |> List.map (\a -> ( a.passId, a ))
+                        |> Dict.fromList
+            in
+                ( newModel
+                , Cmd.none
+                )
 
 
 
 -- View
 
 
-view : Time -> Model -> Html a
-view time lookAngles =
-    case lookAngles of
-        [] ->
-            div [] []
+view : Time -> Dict PassId Pass -> Model -> Html a
+view time passes lookAngles =
+    let
+        passAnglePairs =
+            Dict.merge (\_ _ l -> l)
+                (\_ lookAngle pass l -> l ++ [ ( lookAngle, pass ) ])
+                (\_ _ l -> l)
+                lookAngles
+                passes
+                []
+    in
+        case passAnglePairs of
+            [] ->
+                div [] []
 
-        _ ->
-            div []
-                [ h3 [ style [ ( "text-align", "center" ) ] ]
-                    [ Html.text "Passing now" ]
-                , table
-                    [ class "table"
-                    , style [ ( "text-align", "center" ) ]
+            _ ->
+                div []
+                    [ h3 [ style [ ( "text-align", "center" ) ] ]
+                        [ Html.text "Passing now" ]
+                    , table
+                        [ class "table"
+                        , style [ ( "text-align", "center" ) ]
+                        ]
+                        [ tableHead
+                        , tbody [] (List.map (passRow time) passAnglePairs)
+                        ]
                     ]
-                    [ tableHead
-                    , tbody [] (List.map (passRow time) lookAngles)
-                    ]
-                ]
 
 
 tableHead : Html a
@@ -130,8 +170,8 @@ tableHead =
             ]
 
 
-passRow : Time -> ( Pass, LookAngle ) -> Html a
-passRow time ( pass, lookAngle ) =
+passRow : Time -> ( LookAngle, Pass ) -> Html a
+passRow time ( lookAngle, pass ) =
     let
         td' str =
             td [] [ (text str) ]
