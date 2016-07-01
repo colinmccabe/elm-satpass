@@ -10,17 +10,7 @@
 </head>
 <body></body>
 <script>
-  var geo_options = {
-    enableHighAccuracy: false,
-    maximumAge: 48 * 60 * 60 * 1000,  // 48 hours
-  };
-
   var app = Elm.Main.fullscreen();
-
-  navigator.geolocation.getCurrentPosition(function (pos) {
-    var timestamp = (new Date()).getTime();
-    app.ports.recvTimeAndCoords.send([timestamp, pos.coords]);
-  }, undefined, geo_options);
 
   app.ports.sendPassReq.subscribe(function (req) {
       app.ports.recvPasses.send(SatPredict.getPasses(req));
@@ -29,5 +19,36 @@
   app.ports.sendLookAngleReq.subscribe(function (req) {
       app.ports.recvLookAngles.send(SatPredict.getLookAngles(req));
   });
+
+  // Geolocation
+  var fallbackCoords = { 'latitude': 0.0, 'longitude': 0.0, 'altitude': 0.0 };
+
+  var geoSuccess = function (pos) {
+    var timestamp = (new Date()).getTime();
+    app.ports.recvTimeAndCoords.send([timestamp, pos.coords]);
+  };
+
+  var geoFail = function (geoErr) {
+      console.warn("Geolocation failed.");
+      console.warn(geoErr);
+      var timestamp = (new Date()).getTime();
+      app.ports.recvTimeAndCoords.send([timestamp, fallbackCoords]);
+  };
+
+  var geoOptions = {
+    enableHighAccuracy: false,
+    maximumAge: 48 * 60 * 60 * 1000,  // 48 hours
+    timeout: 10000
+  };
+
+  if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(geoSuccess, geoFail,
+                                               geoOptions);
+  } else {
+      console.warn("Geolocation not available.");
+      var timestamp = (new Date()).getTime();
+      app.ports.recvTimeAndCoords.send([timestamp, fallbackCoords]);
+  }
+
 </script>
 </html>
