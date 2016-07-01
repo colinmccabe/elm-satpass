@@ -47,22 +47,25 @@ window.SatPredict = (function() {
   }
 
 
-  function calcDopplerFactor (observerPos, satPos, velocity) {
+  function calcDopplerFactor (observerPos, satEcf) {
+    var satPos = satEcf.position;
+    var satVelocity = satEcf.velocity;
+
     var currentRange = Math.sqrt(
         Math.pow(satPos.x - observerPos.x, 2) +
         Math.pow(satPos.y - observerPos.y, 2) +
         Math.pow(satPos.z - observerPos.z, 2));
 
-    var nextPos = {
-      x : satPos.x + velocity.x,
-      y : satPos.y + velocity.y,
-      z : satPos.z + velocity.z
+    var nextSatPos = {
+      x : satPos.x + satVelocity.x,
+      y : satPos.y + satVelocity.y,
+      z : satPos.z + satVelocity.z
     };
 
     var nextRange =  Math.sqrt(
-        Math.pow(nextPos.x - observerPos.x, 2) +
-        Math.pow(nextPos.y - observerPos.y, 2) +
-        Math.pow(nextPos.z - observerPos.z, 2));
+        Math.pow(nextSatPos.x - observerPos.x, 2) +
+        Math.pow(nextSatPos.y - observerPos.y, 2) +
+        Math.pow(nextSatPos.z - observerPos.z, 2));
 
     var rangeRate =  currentRange - nextRange;
 
@@ -80,7 +83,7 @@ window.SatPredict = (function() {
 
   function nextPass (satrec, observerGd, searchBegin) {
     var date = new Date(searchBegin.getTime());
-    var lookAngle = undefined;
+    var lookAngle = null;
 
     // Step forward coarsely until el > 0
     do {
@@ -88,8 +91,8 @@ window.SatPredict = (function() {
       date = new Date(date.getTime() + 60000);
     } while ((lookAngle.elevation < 0.0) && (date - searchBegin < 86400000));
 
-    if (lookAngle === undefined) {
-      return undefined;
+    if (lookAngle === null) {
+      return null;
     }
 
     // Step back finely to pass start
@@ -141,7 +144,7 @@ window.SatPredict = (function() {
     while (searchBegin < searchEnd) {
       var pass = nextPass(satrec, gd, searchBegin);
 
-      if (pass === undefined || pass.startTime > searchEnd.getTime()) {
+      if (pass === null || pass.startTime > searchEnd.getTime()) {
         break;
       }
 
@@ -164,11 +167,11 @@ window.SatPredict = (function() {
 
       var observerEcf = satellite.geodeticToEcf(gd);
       var lookAngle = calcLookAngle(satrec, gd, date);
-      var pvEcf = calcPositionAndVelocityEcf(satrec, date);
-      var dopplerFactor = calcDopplerFactor(observerEcf, pvEcf.position, pvEcf.velocity);
+      var satEcf = calcPositionAndVelocityEcf(satrec, date);
+      var dopplerFactor = calcDopplerFactor(observerEcf, satEcf);
 
       lookAngles.push({
-        passId: sat.passId,
+        id: sat.id,
         elevation: toDeg(lookAngle.elevation),
         azimuth: toDeg(lookAngle.azimuth),
         dopplerFactor: dopplerFactor

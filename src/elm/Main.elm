@@ -14,46 +14,52 @@ import Time exposing (Time)
 import Types exposing (..)
 
 
-duration : Time
-duration =
-    16 * Time.hour
-
-
-sats : List SatName
-sats =
-    [ "AO-85"
-    , "CO-55"
-    , "CO-57"
-    , "CO-58"
-    , "CO-65"
-    , "CO-66"
-    , "FO-29"
-    , "ISS"
-    , "LILACSAT-2"
-    , "NO-44"
-    , "NO-84"
-    , "SO-50"
-    , "UKUBE-1"
-    , "XW-2A"
-    , "XW-2B"
-    , "XW-2C"
-    , "XW-2D"
-    , "XW-2F"
-    ]
-
-
 main : Program Never
 main =
     App.program
         { init = init
-        , update = update
-        , view = view
+        , update = update context
+        , view = view context
         , subscriptions = subs
         }
 
 
+type alias Context =
+    { history : Time
+    , loadMoreInterval : Time
+    , sats : List SatName
+    }
+
+
+context : Context
+context =
+    { history = 1 * Time.hour
+    , loadMoreInterval = 16 * Time.hour
+    , sats =
+        [ "AO-85"
+        , "CO-55"
+        , "CO-57"
+        , "CO-58"
+        , "CO-65"
+        , "CO-66"
+        , "FO-29"
+        , "ISS"
+        , "LILACSAT-2"
+        , "NO-44"
+        , "NO-84"
+        , "SO-50"
+        , "UKUBE-1"
+        , "XW-2A"
+        , "XW-2B"
+        , "XW-2C"
+        , "XW-2D"
+        , "XW-2F"
+        ]
+    }
+
+
 type alias Model =
-    { status : String
+    { noPassesText : String
     , coords : Coords
     , time : Time
     , tles : Dict SatName Tle
@@ -66,7 +72,7 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { status = "Trying to get location..."
+    ( { noPassesText = "Trying to get location..."
       , coords = { latitude = 0.0, longitude = 0.0, altitude = Nothing }
       , time = 0.0
       , tles = Dict.empty
@@ -81,7 +87,7 @@ init =
 
 type Msg
     = TimeAndCoords ( Time, Coords )
-    | Tle (Dict SatName Tle)
+    | TleString String
     | Passes ( Time, List Pass )
     | Filter PassFilter.Msg
     | Tick Time
@@ -98,9 +104,8 @@ getTles : List SatName -> Cmd Msg
 getTles sats =
     Http.getString "nasabare.txt"
         |> (flip Task.onError) (\_ -> Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt")
-        |> Task.map (parseTle sats)
         |> Task.mapError toString
-        |> Task.perform Fail Tle
+        |> Task.perform Fail TleString
 
 
 type alias PassReq =
@@ -114,8 +119,8 @@ type alias PassReq =
 port sendPassReq : PassReq -> Cmd msg
 
 
-nextPassReq : Model -> PassReq
-nextPassReq { coords, tles, loadedUpTo } =
+nextPassReq : Time -> Model -> PassReq
+nextPassReq loadMoreInterval { coords, tles, loadedUpTo } =
     tles
         |> Dict.toList
         |> List.map
@@ -127,7 +132,7 @@ nextPassReq { coords, tles, loadedUpTo } =
         |> (\sats ->
                 { coords = coords
                 , begin = loadedUpTo
-                , end = loadedUpTo + duration
+                , end = loadedUpTo + loadMoreInterval
                 , sats = sats
                 }
            )
@@ -157,26 +162,29 @@ subs model =
 -- Update
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update action model =
+update : Context -> Msg -> Model -> ( Model, Cmd Msg )
+update context action model =
     case action of
         TimeAndCoords ( time, coords ) ->
             ( { model
                 | coords = coords
                 , time = time
-                , loadedUpTo = time - 1 * Time.hour
-                , status = "Trying to get TLEs..."
+                , loadedUpTo = time - context.history
+                , noPassesText = "Trying to get TLEs..."
               }
-            , getTles sats
+            , getTles context.sats
             )
 
-        Tle tles ->
+        TleString tleStr ->
             let
+                tles =
+                    parseTle context.sats tleStr
+
                 model' =
-                    { model | tles = tles, status = "Trying to get passes..." }
+                    { model | tles = tles, noPassesText = "Trying to get passes..." }
             in
                 ( model'
-                , sendPassReq (nextPassReq model')
+                , sendPassReq (nextPassReq context.loadMoreInterval model')
                 )
 
         Passes ( endTime, newPasses ) ->
@@ -189,7 +197,7 @@ update action model =
                 ( { model
                     | passes = Dict.union model.passes newPassesDict
                     , loadedUpTo = endTime
-                    , status = "No passes meet criteria"
+                    , noPassesText = "No passes meet criteria"
                   }
                 , Cmd.none
                 )
@@ -215,11 +223,11 @@ update action model =
 
         LoadMorePasses ->
             ( model
-            , sendPassReq (nextPassReq model)
+            , sendPassReq (nextPassReq context.loadMoreInterval model)
             )
 
         Fail msg ->
-            ( { model | status = msg }
+            ( { model | noPassesText = msg }
             , Cmd.none
             )
 
@@ -228,8 +236,8 @@ update action model =
 -- View
 
 
-view : Model -> Html Msg
-view model =
+view : Context -> Model -> Html Msg
+view context model =
     let
         filteredPasses =
             model.passes
@@ -237,10 +245,10 @@ view model =
                 |> List.map snd
                 |> List.filter (PassFilter.pred model.filter)
 
-        passTable =
+        passTableOrText =
             case filteredPasses of
                 [] ->
-                    H.div [] [ H.text model.status ]
+                    H.div [] [ H.text model.noPassesText ]
 
                 _ ->
                     PassTable.view model.time filteredPasses
@@ -250,8 +258,8 @@ view model =
             , H.div [ HA.style [ ( "height", "5px" ) ] ] []
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Future passes" ]
-            , App.map Filter (PassFilter.view sats model.filter)
-            , passTable
+            , App.map Filter (PassFilter.view context.sats model.filter)
+            , passTableOrText
             , loadMoreButton
             ]
 

@@ -19,14 +19,14 @@ import Types exposing (..)
 
 
 type alias LookAngle =
-    { passId : PassId
+    { id : PassId
     , elevation : Deg
     , azimuth : Deg
     , dopplerFactor : Float
     }
 
 
-type alias ParentModel a =
+type alias Context a =
     { a
         | coords : Coords
         , tles : Dict String Tle
@@ -55,19 +55,19 @@ type Msg
 type alias LookAngleReq =
     { time : Time
     , coords : Coords
-    , sats : List { passId : PassId, tle : Tle }
+    , sats : List { id : PassId, tle : Tle }
     }
 
 
 port sendLookAngleReq : LookAngleReq -> Cmd msg
 
 
-nextReq : ParentModel r -> Time -> LookAngleReq
+nextReq : Context a -> Time -> LookAngleReq
 nextReq { coords, tles, passes } time =
     let
         idTleRecord pass =
             Dict.get pass.satName tles
-                |> Maybe.map (\tle -> { passId = pass.passId, tle = tle })
+                |> Maybe.map (\tle -> { id = pass.passId, tle = tle })
     in
         passes
             |> Dict.toList
@@ -96,19 +96,19 @@ subs model =
 -- Update
 
 
-update : ParentModel a -> Msg -> Model -> ( Model, Cmd Msg )
-update parentModel action model =
+update : Context a -> Msg -> Model -> ( Model, Cmd Msg )
+update context action model =
     case action of
         Tick time ->
             ( model
-            , sendLookAngleReq (nextReq parentModel time)
+            , sendLookAngleReq (nextReq context time)
             )
 
         LookAngles lookAngles ->
             let
                 newModel =
                     lookAngles
-                        |> List.map (\a -> ( a.passId, a ))
+                        |> List.map (\angle -> ( angle.id, angle ))
                         |> Dict.fromList
             in
                 ( newModel
