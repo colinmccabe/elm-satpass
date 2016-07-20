@@ -1,9 +1,9 @@
 module PassTable exposing (view)
 
 import Date exposing (Date)
+import Date.Format
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import String
 import Time exposing (Time)
 import Types exposing (..)
 
@@ -14,13 +14,19 @@ view time passes =
         sortedPasses =
             List.sortBy .startTime passes
     in
-        table
-            [ class "table"
-            , style [ ( "text-align", "center" ) ]
-            ]
-            [ tableHead
-            , tbody [] (List.map (passRow time) sortedPasses)
-            ]
+        case sortedPasses of
+            [] ->
+                p [ style [ ( "text-align", "center" ) ] ]
+                    [ text "No passes" ]
+
+            _ ->
+                table
+                    [ class "table"
+                    , style [ ( "text-align", "center" ) ]
+                    ]
+                    [ tableHead
+                    , tbody [] (List.map (passRow time) sortedPasses)
+                    ]
 
 
 tableHead : Html a
@@ -33,13 +39,11 @@ tableHead =
         thead []
             [ tr []
                 [ th' "Day"
+                , th' "Date"
                 , th' "Satellite"
                 , th' "Max El"
-                , th' "Start"
-                , th' "Apogee"
-                , th' "End"
-                , th' "Start Az"
-                , th' "End Az"
+                , th' "Start → Apogee → End"
+                , th' "Az"
                 ]
             ]
 
@@ -47,29 +51,6 @@ tableHead =
 passRow : Time -> Pass -> Html a
 passRow time pass =
     let
-        td' str =
-            td [] [ (text str) ]
-
-        showDegrees deg =
-            deg |> ceiling |> toString |> \s -> s ++ "°"
-
-        showDayOfWeek time =
-            time |> Date.fromTime |> Date.dayOfWeek |> toString
-
-        showTime time =
-            let
-                h =
-                    time |> Date.fromTime |> Date.hour |> toString
-
-                mm =
-                    time
-                        |> Date.fromTime
-                        |> Date.minute
-                        |> toString
-                        |> String.padLeft 2 '0'
-            in
-                h ++ ":" ++ mm
-
         rowClass =
             if time > pass.endTime then
                 "text-muted active"
@@ -81,14 +62,34 @@ passRow time pass =
                 "warning"
             else
                 ""
+
+        td' str =
+            td [] [ (text str) ]
+
+        showDegrees deg =
+            deg |> ceiling |> toString |> (\s -> s ++ "°")
+
+        dayStr =
+            Date.fromTime >> Date.Format.format "%a"
+
+        dateStr =
+            Date.fromTime >> Date.Format.format "%m/%d"
+
+        timeStr =
+            Date.fromTime >> Date.Format.format "%k:%M"
+
+        startApogeeEnd =
+            timeStr pass.startTime
+                ++ " → "
+                ++ timeStr pass.apogeeTime
+                ++ " → "
+                ++ timeStr pass.endTime
     in
         tr [ class rowClass ]
-            [ td' (showDayOfWeek pass.startTime)
+            [ td' (dayStr pass.startTime)
+            , td' (dateStr pass.startTime)
             , td [] [ strong [] [ text pass.satName ] ]
             , td' (showDegrees pass.maxEl)
-            , td' (showTime pass.startTime)
-            , td' (showTime pass.apogeeTime)
-            , td' (showTime pass.endTime)
-            , td' (showDegrees pass.startAz)
-            , td' (showDegrees pass.endAz)
+            , td' startApogeeEnd
+            , td' (showDegrees pass.startAz ++ " → " ++ showDegrees pass.endAz)
             ]

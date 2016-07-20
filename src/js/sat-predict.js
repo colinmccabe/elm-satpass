@@ -11,11 +11,11 @@ window.SatPredict = (function() {
   }
 
 
-  function observerGd (coords) {
+  function observerGd (latitude, longitude, altitude) {
     return {
-      latitude: toRad(coords.latitude),
-      longitude: toRad(coords.longitude),
-      height: coords.altitude
+      latitude: toRad(latitude),
+      longitude: toRad(longitude),
+      height: altitude
     };
   }
 
@@ -133,12 +133,12 @@ window.SatPredict = (function() {
   }
 
 
-  function passesForSat (coords, tleLine1, tleLine2, begin, end) {
+  function passesForSat (tleLine1, tleLine2, req) {
     var satrec = satellite.twoline2satrec(tleLine1, tleLine2);
-    var gd = observerGd(coords);
+    var gd = observerGd(req.latitude, req.longitude, req.altitude);
 
-    var searchBegin = new Date(begin);
-    var searchEnd = new Date(end);
+    var searchBegin = new Date(req.begin);
+    var searchEnd = new Date(req.end);
     var passes = [];
 
     while (searchBegin < searchEnd) {
@@ -162,7 +162,7 @@ window.SatPredict = (function() {
 
     req.sats.forEach(function (sat) {
       var date = new Date(req.time);
-      var gd = observerGd(req.coords);
+      var gd = observerGd(req.latitude, req.longitude, req.altitude);
       var satrec = satellite.twoline2satrec(sat.tle.line1, sat.tle.line2);
 
       var observerEcf = satellite.geodeticToEcf(gd);
@@ -187,12 +187,12 @@ window.SatPredict = (function() {
     var passes = [];
 
     req.sats.forEach(function (sat) {
-      var satPasses = passesForSat(req.coords, sat.tle.line1, sat.tle.line2,
-                                   req.begin, req.end);
+      var satPasses = passesForSat(sat.tle.line1, sat.tle.line2, req);
 
       satPasses.forEach(function (pass) {
+        var approxStartTime = Math.floor(pass.startTime / 10000);
+        pass.passId = sat.satName + '_' + String(approxStartTime);
         pass.satName = sat.satName,
-        pass.passId = sat.satName + '_' + String(pass.startTime);
         passes.push(pass);
       });
     });

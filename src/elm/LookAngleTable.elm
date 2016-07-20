@@ -10,6 +10,7 @@ port module LookAngleTable
 
 import Date
 import Dict exposing (Dict)
+import Geolocation
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Platform.Cmd exposing (Cmd)
@@ -28,7 +29,7 @@ type alias LookAngle =
 
 type alias Context a =
     { a
-        | coords : Coords
+        | location : Geolocation.Location
         , tles : Dict String Tle
         , passes : Dict PassId Pass
     }
@@ -54,7 +55,9 @@ type Msg
 
 type alias LookAngleReq =
     { time : Time
-    , coords : Coords
+    , latitude : Float
+    , longitude : Float
+    , altitude : Float
     , sats : List { id : PassId, tle : Tle }
     }
 
@@ -63,7 +66,7 @@ port sendLookAngleReq : LookAngleReq -> Cmd msg
 
 
 nextReq : Context a -> Time -> LookAngleReq
-nextReq { coords, tles, passes } time =
+nextReq { location, tles, passes } time =
     let
         idTleRecord pass =
             Dict.get pass.satName tles
@@ -74,7 +77,17 @@ nextReq { coords, tles, passes } time =
             |> List.map snd
             |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
             |> List.filterMap idTleRecord
-            |> (\sats -> { time = time, coords = coords, sats = sats })
+            |> (\sats ->
+                    { time = time
+                    , latitude = location.latitude
+                    , longitude = location.longitude
+                    , altitude =
+                        location.altitude
+                            |> Maybe.map .value
+                            |> Maybe.withDefault 0.0
+                    , sats = sats
+                    }
+               )
 
 
 
@@ -133,13 +146,12 @@ view time passes lookAngles =
     in
         case passAnglePairs of
             [] ->
-                div [] []
+                p [ style [ ( "text-align", "center" ) ] ]
+                    [ text "None" ]
 
             _ ->
                 div []
-                    [ h3 [ style [ ( "text-align", "center" ) ] ]
-                        [ Html.text "Passing now" ]
-                    , table
+                    [ table
                         [ class "table"
                         , style [ ( "text-align", "center" ) ]
                         ]

@@ -5,6 +5,17 @@ import String
 import Time exposing (Time)
 
 
+type UserMsg
+    = Present Level String
+    | Absent
+
+
+type Level
+    = Info
+    | Warning
+    | Error
+
+
 type alias SatName =
     String
 
@@ -15,13 +26,6 @@ type alias PassId =
 
 type alias Deg =
     Float
-
-
-type alias Coords =
-    { latitude : Deg
-    , longitude : Deg
-    , altitude : Maybe Float
-    }
 
 
 type alias Tle =
