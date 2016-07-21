@@ -132,7 +132,6 @@ getLocation =
 getTles : List SatName -> Cmd Msg
 getTles sats =
     Http.getString "nasabare.txt"
-        |> (flip Task.onError) (\_ -> Http.getString "https://s3.amazonaws.com/cmccabe/keps/nasabare.txt")
         |> Task.mapError toString
         |> Task.perform Fail TleString
 
