@@ -6,6 +6,7 @@ import Html as H exposing (Html)
 import Html.App as App
 import Html.Attributes as HA
 import Html.Events
+import Html.Lazy
 import Http
 import LookAngleTable
 import PassFilter
@@ -20,7 +21,7 @@ main =
     App.program
         { init = init context
         , update = update context
-        , view = view context
+        , view = Html.Lazy.lazy (view context)
         , subscriptions = subs
         }
 
