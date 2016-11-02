@@ -1,16 +1,17 @@
 port module Main exposing (main)
 
 import Dict exposing (Dict)
-import Geolocation exposing (Location)
 import Html as H exposing (Html)
 import Html.App as App
 import Html.Attributes as HA
 import Html.Events
 import Html.Lazy
 import Http
+import Json.Decode as JD exposing ((:=))
 import LookAngleTable
 import PassFilter
 import PassTable
+import String
 import Task exposing (Task)
 import Time exposing (Time)
 import Types exposing (..)
@@ -19,78 +20,52 @@ import Types exposing (..)
 main : Program Never
 main =
     App.program
-        { init = init context
-        , update = update context
-        , view = Html.Lazy.lazy (view context)
+        { init = init
+        , update = update
+        , view = Html.Lazy.lazy view
         , subscriptions = subs
         }
 
 
-type alias Context =
-    { history : Time
-    , loadMoreInterval : Time
-    , defaultLocation : Location
-    , sats : List SatName
-    }
-
-
-context : Context
-context =
-    { history = 1 * Time.hour
-    , loadMoreInterval = 16 * Time.hour
-    , defaultLocation =
-        { latitude = 0.0
-        , longitude = 0.0
-        , accuracy = 1.0
-        , altitude = Nothing
-        , movement = Nothing
-        , timestamp = 0.0
-        }
-    , sats =
-        [ "AO-85"
-        , "CO-55"
-        , "CO-57"
-        , "CO-58"
-        , "CO-65"
-        , "CO-66"
-        , "FO-29"
-        , "ISS"
-        , "LILACSAT-2"
-        , "NO-44"
-        , "NO-84"
-        , "SO-50"
-        , "UKUBE-1"
-        , "XW-2A"
-        , "XW-2B"
-        , "XW-2C"
-        , "XW-2D"
-        , "XW-2F"
-        ]
-    }
+sats : List String
+sats =
+    [ "AO-85"
+    , "CO-55"
+    , "CO-57"
+    , "CO-58"
+    , "CO-65"
+    , "CO-66"
+    , "FO-29"
+    , "ISS"
+    , "LILACSAT-2"
+    , "NO-44"
+    , "NO-84"
+    , "SO-50"
+    , "UKUBE-1"
+    , "XW-2A"
+    , "XW-2B"
+    , "XW-2C"
+    , "XW-2D"
+    , "XW-2F"
+    ]
 
 
 type alias Model =
-    { geoMsg : UserMsg
-    , msg : UserMsg
-    , location : Location
-    , time : Time
-    , tles : Dict SatName Tle
+    { msg : UserMsg
     , passes : Dict PassId Pass
     , loadedUpTo : Time
+    , time : Time
     , filter : PassFilter.Model
     , lookAngleTable : LookAngleTable.Model
     }
 
 
-init : Context -> ( Model, Cmd Msg )
-init context =
-    ( { geoMsg = Absent
-      , msg = Present Info "Trying to get location..."
-      , location = context.defaultLocation
-      , time = 0.0
-      , tles = Dict.empty
+init : ( Model, Cmd Msg )
+init =
+    ( { msg = Present Info "Getting passes..."
       , passes = Dict.empty
-      , loadedUpTo = 0.0
+      , loadedUpTo = 0
+      , time = 0
       , filter = PassFilter.init
       , lookAngleTable = LookAngleTable.init
       }
@@ -99,10 +74,8 @@ init context =
 
 
 type Msg
-    = Timestamp Time
-    | Location (Maybe Location)
-    | TleString String
-    | Passes ( Time, List Pass )
+    = CurrentTime Time
+    | Passes Time (List Pass)
     | Filter PassFilter.Msg
     | Tick Time
     | LookAngleTable LookAngleTable.Msg
@@ -116,128 +89,81 @@ type Msg
 
 getTimestamp : Cmd Msg
 getTimestamp =
-    Time.now |> Task.mapError toString |> Task.perform Fail Timestamp
-
-
-getLocation : Cmd Msg
-getLocation =
-    Geolocation.nowWith
-        { enableHighAccuracy = False
-        , timeout = Just 10000
-        , maximumAge = Just (48 * 3600000)
-        }
-        |> Task.toMaybe
-        |> Task.perform Fail Location
-
-
-getTles : List SatName -> Cmd Msg
-getTles sats =
-    Http.getString "nasabare.txt"
-        |> Task.mapError toString
-        |> Task.perform Fail TleString
-
-
-type alias PassReq =
-    { latitude : Float
-    , longitude : Float
-    , altitude : Float
-    , begin : Time
-    , end : Time
-    , sats : List { satName : SatName, tle : Tle }
-    }
-
-
-port sendPassReq : PassReq -> Cmd msg
-
-
-nextPassReq : Time -> Model -> PassReq
-nextPassReq loadMoreInterval { location, tles, loadedUpTo } =
-    tles
-        |> Dict.toList
-        |> List.map
-            (\( satName, tle ) ->
-                { satName = satName
-                , tle = tle
-                }
-            )
-        |> (\sats ->
-                { latitude = location.latitude
-                , longitude = location.longitude
-                , altitude =
-                    location.altitude
-                        |> Maybe.map .value
-                        |> Maybe.withDefault 0.0
-                , begin = loadedUpTo
-                , end = loadedUpTo + loadMoreInterval
-                , sats = sats
-                }
-           )
+    Time.now |> Task.perform Fail CurrentTime
 
 
 
 -- Subs
 
 
-port recvPasses : (( Time, List Pass ) -> msg) -> Sub msg
-
-
 subs : Model -> Sub Msg
 subs model =
     Sub.batch
-        [ recvPasses Passes
-        , Time.every Time.second Tick
+        [ Time.every Time.second Tick
         , Sub.map LookAngleTable (LookAngleTable.subs model.lookAngleTable)
         ]
+
+
+
+-- Tasks
+
+
+decodePass : JD.Decoder Pass
+decodePass =
+    JD.object8 Pass
+        (JD.map toString ("startTime" := JD.float))
+        ("satName" := JD.string)
+        ("maxEl" := JD.int)
+        ("startTime" := JD.float)
+        ("apogeeTime" := JD.float)
+        ("endTime" := JD.float)
+        ("startAz" := JD.int)
+        ("endAz" := JD.int)
+
+
+getPasses : Time -> Time -> Cmd Msg
+getPasses from to =
+    let
+        queryParams =
+            [ ( "from", toString from )
+            , ( "to", toString to )
+            , ( "sats", String.join "," sats )
+            , ( "min-el", toString 30 )
+            ]
+
+        url =
+            Http.url "http://colin-tower:8080/satpass/passes" queryParams
+
+        httpTask =
+            Http.get (JD.list decodePass) url
+                |> Task.mapError toString
+    in
+        Task.perform Fail (Passes to) httpTask
 
 
 
 -- Update
 
 
-update : Context -> Msg -> Model -> ( Model, Cmd Msg )
-update context action model =
+update : Msg -> Model -> ( Model, Cmd Msg )
+update action model =
     case action of
-        Timestamp time ->
-            ( { model
-                | time = time
-                , loadedUpTo = time - context.history
-              }
-            , getLocation
-            )
-
-        Location (Just location) ->
-            ( { model
-                | location = location
-                , geoMsg = Absent
-                , msg = Present Info "Getting TLEs..."
-              }
-            , getTles context.sats
-            )
-
-        Location Nothing ->
-            ( { model
-                | geoMsg = Present Warning "Warning: Geolocation failed, fell back to 0°N, 0°E"
-                , msg = Present Info "Getting TLEs..."
-              }
-            , getTles context.sats
-            )
-
-        TleString tleStr ->
+        CurrentTime time ->
             let
-                tles =
-                    parseTle context.sats tleStr
+                from =
+                    time - (1 * Time.hour)
 
-                model' =
-                    { model
-                        | tles = tles
-                        , msg = Present Info "Getting passes..."
-                    }
+                to =
+                    time + (4 * Time.hour)
             in
-                ( model'
-                , sendPassReq (nextPassReq context.loadMoreInterval model')
+                ( { model
+                    | time = time
+                    , loadedUpTo = time - (1 * Time.hour)
+                  }
+                , getPasses from to
                 )
 
-        Passes ( endTime, newPasses ) ->
+        Passes loadedUpTo newPasses ->
             let
                 newPassesDict =
                     newPasses
@@ -245,8 +171,9 @@ update context action model =
                         |> Dict.fromList
             in
                 ( { model
-                    | passes = Dict.union model.passes newPassesDict
-                    , loadedUpTo = endTime
+                    | passes =
+                        Dict.union model.passes newPassesDict
+                    , loadedUpTo = loadedUpTo
                     , msg = Absent
                   }
                 , Cmd.none
@@ -265,16 +192,23 @@ update context action model =
         LookAngleTable childMsg ->
             let
                 ( lookAngleModel, lookAngleCmd ) =
-                    LookAngleTable.update model childMsg model.lookAngleTable
+                    LookAngleTable.update model.passes childMsg model.lookAngleTable
             in
                 ( { model | lookAngleTable = lookAngleModel }
                 , Cmd.map LookAngleTable lookAngleCmd
                 )
 
         LoadMorePasses ->
-            ( model
-            , sendPassReq (nextPassReq context.loadMoreInterval model)
-            )
+            let
+                from =
+                    model.loadedUpTo
+
+                to =
+                    model.loadedUpTo + (16 * Time.hour)
+            in
+                ( model
+                , getPasses from to
+                )
 
         Fail msg ->
             ( { model | msg = Present Error msg }
@@ -286,8 +220,8 @@ update context action model =
 -- View
 
 
-view : Context -> Model -> Html Msg
-view context model =
+view : Model -> Html Msg
+view model =
     let
         filteredPasses =
             model.passes
@@ -299,15 +233,14 @@ view context model =
             [ HA.class "container"
             , HA.style [ ( "max-width", "980px" ) ]
             ]
-            [ infoBox model.geoMsg
-            , infoBox model.msg
+            [ infoBox model.msg
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Current passes" ]
             , LookAngleTable.view model.time model.passes model.lookAngleTable
             , H.div [ HA.style [ ( "height", "5px" ) ] ] []
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Future passes" ]
-            , App.map Filter (PassFilter.view context.sats model.filter)
+            , App.map Filter (PassFilter.view sats model.filter)
             , PassTable.view model.time filteredPasses
             , loadMoreButton
             ]
@@ -330,7 +263,7 @@ infoBox userMsg =
                             "bg-warning"
 
                         Error ->
-                            "bg-error"
+                            "bg-danger"
             in
                 H.p
                     [ HA.class cssClass

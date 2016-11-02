@@ -10,123 +10,120 @@ port module LookAngleTable
 
 import Date
 import Dict exposing (Dict)
-import Geolocation
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Http
 import Platform.Cmd exposing (Cmd)
 import String
+import Task
+import Json.Decode as JD exposing ((:=))
 import Time exposing (Time)
 import Types exposing (..)
 
 
 type alias LookAngle =
-    { id : PassId
-    , elevation : Deg
-    , azimuth : Deg
-    , dopplerFactor : Float
-    }
-
-
-type alias Context a =
-    { a
-        | location : Geolocation.Location
-        , tles : Dict String Tle
-        , passes : Dict PassId Pass
+    { elevation : Float
+    , azimuth : Float
     }
 
 
 type alias Model =
-    Dict PassId LookAngle
+    Result String (Dict SatName LookAngle)
 
 
 init : Model
 init =
-    Dict.empty
+    Err "Loading..."
 
 
 type Msg
     = Tick Time
-    | LookAngles (List LookAngle)
+    | LookAngles (Dict String LookAngle)
+    | Fail String
 
 
 
 -- Cmds
 
 
-type alias LookAngleReq =
-    { time : Time
-    , latitude : Float
-    , longitude : Float
-    , altitude : Float
-    , sats : List { id : PassId, tle : Tle }
-    }
+decodePos : JD.Decoder LookAngle
+decodePos =
+    JD.object2 LookAngle
+        ("elevation" := JD.float)
+        ("azimuth" := JD.float)
 
 
-port sendLookAngleReq : LookAngleReq -> Cmd msg
+satList : Dict PassId Pass -> Time -> Dict SatName PassId
+satList passes time =
+    passes
+        |> Dict.toList
+        |> List.map snd
+        |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
+        |> List.map (\pass -> ( pass.satName, pass.passId ))
+        |> Dict.fromList
 
 
-nextReq : Context a -> Time -> LookAngleReq
-nextReq { location, tles, passes } time =
-    let
-        idTleRecord pass =
-            Dict.get pass.satName tles
-                |> Maybe.map (\tle -> { id = pass.passId, tle = tle })
-    in
-        passes
-            |> Dict.toList
-            |> List.map snd
-            |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
-            |> List.filterMap idTleRecord
-            |> (\sats ->
-                    { time = time
-                    , latitude = location.latitude
-                    , longitude = location.longitude
-                    , altitude =
-                        location.altitude
-                            |> Maybe.map .value
-                            |> Maybe.withDefault 0.0
-                    , sats = sats
-                    }
-               )
+getLookAngles : Dict SatName PassId -> Cmd Msg
+getLookAngles sats =
+    if Dict.isEmpty sats then
+        Task.perform Fail LookAngles (Task.succeed Dict.empty)
+    else
+        let
+            satNames =
+                Dict.keys sats
+
+            queryParams =
+                [ ( "sats", String.join "," satNames ) ]
+
+            url =
+                Http.url "http://colin-tower:8080/satpass/pos" queryParams
+
+            mergeFunc =
+                \lookAngles ->
+                    Dict.merge (\key passId acc -> Debug.crash "extra passId entry")
+                        (\key passId lookAngle acc -> ( passId, lookAngle ) :: acc)
+                        (\key lookAngle acc -> Debug.crash "extra lookAngle entry")
+                        sats
+                        lookAngles
+                        []
+
+            httpTask =
+                Http.get (JD.dict decodePos) url
+                    |> Task.map mergeFunc
+                    |> Task.map Dict.fromList
+                    |> Task.mapError toString
+        in
+            Task.perform Fail LookAngles httpTask
 
 
 
 -- Subs
 
 
-port recvLookAngles : (List LookAngle -> msg) -> Sub msg
-
-
 subs : Model -> Sub Msg
 subs model =
-    Sub.batch
-        [ Time.every Time.second Tick
-        , recvLookAngles LookAngles
-        ]
+    Time.every Time.second Tick
 
 
 
 -- Update
 
 
-update : Context a -> Msg -> Model -> ( Model, Cmd Msg )
-update context action model =
+update : Dict PassId Pass -> Msg -> Model -> ( Model, Cmd Msg )
+update passes action model =
     case action of
         Tick time ->
             ( model
-            , sendLookAngleReq (nextReq context time)
+            , getLookAngles (satList passes time)
             )
 
         LookAngles lookAngles ->
-            let
-                newModel =
-                    lookAngles
-                        |> List.map (\angle -> ( angle.id, angle ))
-                        |> Dict.fromList
-            in
-                ( newModel
-                , Cmd.none
-                )
+            ( Ok lookAngles
+            , Cmd.none
+            )
+
+        Fail msg ->
+            ( model, Cmd.none )
 
 
 
@@ -134,7 +131,18 @@ update context action model =
 
 
 view : Time -> Dict PassId Pass -> Model -> Html a
-view time passes lookAngles =
+view time passes lookAnglesRes =
+    case lookAnglesRes of
+        Ok lookAngles ->
+            angleTable time passes lookAngles
+
+        Err msg ->
+            p [ style [ ( "text-align", "center" ) ] ]
+                [ text msg ]
+
+
+angleTable : Time -> Dict PassId Pass -> Dict PassId LookAngle -> Html a
+angleTable time passes lookAngles =
     let
         passAnglePairs =
             Dict.merge (\_ _ l -> l)
@@ -185,11 +193,8 @@ tableHead =
 passRow : Time -> ( LookAngle, Pass ) -> Html a
 passRow time ( lookAngle, pass ) =
     let
-        td' str =
-            td [] [ (text str) ]
-
         showDegrees deg =
-            deg |> ceiling |> toString |> \s -> s ++ "°"
+            deg |> toString |> \s -> s ++ "°"
 
         showTime time =
             let
@@ -212,7 +217,7 @@ passRow time ( lookAngle, pass ) =
                 "↓"
 
         elText =
-            showDegrees lookAngle.elevation
+            showDegrees (ceiling lookAngle.elevation)
                 ++ " ("
                 ++ showDegrees pass.maxEl
                 ++ ") "
@@ -220,6 +225,9 @@ passRow time ( lookAngle, pass ) =
 
         rowClass =
             "success"
+
+        td' str =
+            td [] [ (text str) ]
     in
         tr [ class rowClass ]
             [ td [] [ strong [] [ text pass.satName ] ]
@@ -228,6 +236,6 @@ passRow time ( lookAngle, pass ) =
             , td' (showTime pass.apogeeTime)
             , td' (showTime pass.endTime)
             , td' (showDegrees pass.startAz)
-            , td' (showDegrees lookAngle.azimuth)
+            , td' (showDegrees (ceiling lookAngle.azimuth))
             , td' (showDegrees pass.endAz)
             ]

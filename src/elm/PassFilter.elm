@@ -15,7 +15,7 @@ type alias Hour =
 
 type alias Model =
     { satName : String
-    , minEl : Deg
+    , minEl : Int
     , afterHour : Hour
     , beforeHour : Hour
     }
@@ -32,7 +32,7 @@ init =
 
 type Msg
     = SatName String
-    | MinEl Deg
+    | MinEl Int
     | AfterHour Hour
     | BeforeHour Hour
     | Reset
@@ -80,9 +80,9 @@ view satList filter =
         , H.div [ HA.class "row" ]
             [ H.div [ HA.class "col-xs-4" ]
                 [ slider "Min El"
-                    (toFloat >> MinEl)
+                    MinEl
                     ( 5, 5, 89 )
-                    (round filter.minEl)
+                    filter.minEl
                 ]
             , H.div [ HA.class "col-xs-4" ]
                 [ satNameFilter ]
@@ -144,7 +144,7 @@ pred filter pass =
     List.all identity
         [ Date.hour (Date.fromTime pass.startTime) >= filter.afterHour
         , Date.hour (Date.fromTime pass.startTime) <= filter.beforeHour
-        , (ceiling pass.maxEl) >= (floor filter.minEl)
+        , pass.maxEl >= filter.minEl
         , String.contains (String.toUpper filter.satName)
             (String.toUpper pass.satName)
         ]

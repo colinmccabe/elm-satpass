@@ -37,12 +37,12 @@ type alias Tle =
 type alias Pass =
     { passId : PassId
     , satName : SatName
-    , maxEl : Deg
+    , maxEl : Int
     , startTime : Time
     , apogeeTime : Time
     , endTime : Time
-    , startAz : Deg
-    , endAz : Deg
+    , startAz : Int
+    , endAz : Int
     }
 
 

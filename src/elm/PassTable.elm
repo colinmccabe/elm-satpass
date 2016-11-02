@@ -67,7 +67,7 @@ passRow time pass =
             td [] [ (text str) ]
 
         showDegrees deg =
-            deg |> ceiling |> toString |> (\s -> s ++ "°")
+            deg |> toString |> (\s -> s ++ "°")
 
         dayStr =
             Date.fromTime >> Date.Format.format "%a"

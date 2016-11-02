@@ -4,24 +4,11 @@
     <meta charset="utf-8">
     <title>SatPass</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
-    <script type="text/javascript" src="satellite.min.js"></script>
-    <script type="text/javascript" src="sat-predict.js"></script>
     <script type="text/javascript" src="elm.js"></script>
 </head>
 <body>
 <script>
   var app = Elm.Main.fullscreen();
-
-  app.ports.sendPassReq.subscribe(function (req) {
-    setTimeout(function () {
-      app.ports.recvPasses.send(SatPredict.getPasses(req));
-    }, 0);
-  });
-
-  app.ports.sendLookAngleReq.subscribe(function (req) {
-    app.ports.recvLookAngles.send(SatPredict.getLookAngles(req));
-  });
-
 </script>
 </body>
 </html>
