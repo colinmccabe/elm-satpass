@@ -1,30 +1,27 @@
-port module Main exposing (main)
+module Main exposing (main)
 
 import Dict exposing (Dict)
 import Html as H exposing (Html)
-import Html.App as App
+import Html
 import Html.Attributes as HA
 import Html.Events
 import Html.Lazy
 import Http
-import Json.Decode as JD exposing ((:=))
+import Json.Decode as JD
 import LookAngleTable
 import PassFilter
 import PassTable
+import Result.Extra
 import String
 import Task exposing (Task)
 import Time exposing (Time)
+import Tuple
 import Types exposing (..)
 
 
-main : Program Never
-main =
-    App.program
-        { init = init
-        , update = update
-        , view = Html.Lazy.lazy view
-        , subscriptions = subs
-        }
+serverHost : String
+serverHost =
+    "beaglebone-arch"
 
 
 sats : List String
@@ -50,37 +47,44 @@ sats =
     ]
 
 
+main : Program Never Model Msg
+main =
+    Html.program
+        { init = init
+        , update = update
+        , view = Html.Lazy.lazy view
+        , subscriptions = subs
+        }
+
+
 type alias Model =
-    { msg : UserMsg
-    , passes : Dict PassId Pass
+    { time : Time
+    , lookAngles : List ( Pass, LookAngle )
+    , passes : Result String (Dict PassId Pass)
     , loadedUpTo : Time
-    , time : Time
     , filter : PassFilter.Model
-    , lookAngleTable : LookAngleTable.Model
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { msg = Present Info "Getting passes..."
-      , passes = Dict.empty
+    ( { passes = Err "Loading..."
+      , lookAngles = []
       , loadedUpTo = 0
       , time = 0
       , filter = PassFilter.init
-      , lookAngleTable = LookAngleTable.init
       }
     , getTimestamp
     )
 
 
 type Msg
-    = CurrentTime Time
-    | Passes Time (List Pass)
+    = InitalTick Time
+    | Passes (Result String ( Time, List Pass ))
     | Filter PassFilter.Msg
     | Tick Time
-    | LookAngleTable LookAngleTable.Msg
+    | LookAngles (Result String (Dict String LookAngle))
     | LoadMorePasses
-    | Fail String
 
 
 
@@ -89,7 +93,7 @@ type Msg
 
 getTimestamp : Cmd Msg
 getTimestamp =
-    Time.now |> Task.perform Fail CurrentTime
+    Time.now |> Task.perform InitalTick
 
 
 
@@ -98,47 +102,91 @@ getTimestamp =
 
 subs : Model -> Sub Msg
 subs model =
-    Sub.batch
-        [ Time.every Time.second Tick
-        , Sub.map LookAngleTable (LookAngleTable.subs model.lookAngleTable)
-        ]
+    Time.every Time.second Tick
 
 
 
 -- Tasks
 
 
-decodePass : JD.Decoder Pass
-decodePass =
-    JD.object8 Pass
-        (JD.map toString ("startTime" := JD.float))
-        ("satName" := JD.string)
-        ("maxEl" := JD.int)
-        ("startTime" := JD.float)
-        ("apogeeTime" := JD.float)
-        ("endTime" := JD.float)
-        ("startAz" := JD.int)
-        ("endAz" := JD.int)
-
-
 getPasses : Time -> Time -> Cmd Msg
 getPasses from to =
     let
         queryParams =
-            [ ( "from", toString from )
-            , ( "to", toString to )
-            , ( "sats", String.join "," sats )
-            , ( "min-el", toString 30 )
+            [ "from=" ++ Http.encodeUri (toString from)
+            , "to=" ++ Http.encodeUri (toString to)
+            , "sats=" ++ Http.encodeUri (String.join "," sats)
+            , "min-el=" ++ Http.encodeUri (toString 5)
             ]
 
-        url =
-            Http.url "http://colin-tower:8080/satpass/passes" queryParams
+        queryString =
+            "?" ++ String.join "&" queryParams
 
-        httpTask =
-            Http.get (JD.list decodePass) url
-                |> Task.mapError toString
+        url =
+            "http://" ++ serverHost ++ ":8080/satpass/passes" ++ queryString
+
+        decodePass =
+            JD.map8 Pass
+                (JD.field "passId" JD.string)
+                (JD.field "satName" JD.string)
+                (JD.field "maxEl" JD.int)
+                (JD.field "startTime" JD.float)
+                (JD.field "apogeeTime" JD.float)
+                (JD.field "endTime" JD.float)
+                (JD.field "startAz" JD.int)
+                (JD.field "endAz" JD.int)
     in
-        Task.perform Fail (Passes to) httpTask
+        Http.get url (JD.list decodePass)
+            |> Http.send
+                (Result.Extra.unpack (\err -> Passes (Err (toString err)))
+                    (\passes -> Passes (Ok ( to, passes )))
+                )
+
+
+satList : Dict PassId Pass -> Time -> Dict SatName PassId
+satList passes time =
+    passes
+        |> Dict.filter (\_ pass -> time > pass.startTime && time < pass.endTime)
+        |> Dict.toList
+        |> List.map (\( _, pass ) -> ( pass.satName, pass.passId ))
+        |> Dict.fromList
+
+
+getLookAngles : Dict SatName PassId -> Cmd Msg
+getLookAngles nameToIdDict =
+    if Dict.isEmpty nameToIdDict then
+        Cmd.none
+    else
+        let
+            satNames =
+                Dict.keys nameToIdDict
+
+            queryString =
+                "?sats=" ++ String.join "," (List.map Http.encodeUri satNames)
+
+            url =
+                "http://" ++ serverHost ++ ":8080/satpass/pos" ++ queryString
+
+            decodePos =
+                JD.map2 LookAngle
+                    (JD.field "elevation" JD.float)
+                    (JD.field "azimuth" JD.float)
+
+            -- Server returns a map of SatNames to LookAngles
+            -- Change this to a map of PassIds to LookAngles
+            swapKeys nameToAngleDict =
+                Dict.merge (\_ _ _ -> Debug.crash "extra lookAngle entry")
+                    (\_ lookAngle passId acc -> Dict.insert passId lookAngle acc)
+                    (\_ _ _ -> Debug.crash "extra passId entry")
+                    nameToAngleDict
+                    nameToIdDict
+                    Dict.empty
+        in
+            Http.get url (JD.dict decodePos)
+                |> Http.send
+                    (Result.Extra.unpack (LookAngles << Err << toString)
+                        (LookAngles << Ok << swapKeys)
+                    )
 
 
 
@@ -148,13 +196,13 @@ getPasses from to =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update action model =
     case action of
-        CurrentTime time ->
+        InitalTick time ->
             let
                 from =
                     time - (1 * Time.hour)
 
                 to =
-                    time + (4 * Time.hour)
+                    time + (16 * Time.hour)
             in
                 ( { model
                     | time = time
@@ -163,21 +211,25 @@ update action model =
                 , getPasses from to
                 )
 
-        Passes loadedUpTo newPasses ->
+        Passes (Ok ( loadedUpTo, newPasses )) ->
             let
-                newPassesDict =
+                passes =
                     newPasses
                         |> List.map (\pass -> ( pass.passId, pass ))
                         |> Dict.fromList
+                        |> Dict.union (Result.withDefault Dict.empty model.passes)
             in
                 ( { model
-                    | passes =
-                        Dict.union model.passes newPassesDict
+                    | passes = Ok passes
                     , loadedUpTo = loadedUpTo
-                    , msg = Absent
                   }
-                , Cmd.none
+                , getLookAngles (satList passes model.time)
                 )
+
+        Passes (Err msg) ->
+            ( { model | passes = Err msg }
+            , Cmd.none
+            )
 
         Filter action ->
             ( { model | filter = PassFilter.update action model.filter }
@@ -186,17 +238,37 @@ update action model =
 
         Tick time ->
             ( { model | time = time }
-            , Cmd.none
+            , case model.passes of
+                Ok passes ->
+                    getLookAngles (satList passes model.time)
+
+                Err _ ->
+                    Cmd.none
             )
 
-        LookAngleTable childMsg ->
+        LookAngles (Ok lookAnglesDict) ->
             let
-                ( lookAngleModel, lookAngleCmd ) =
-                    LookAngleTable.update model.passes childMsg model.lookAngleTable
+                newLookAngles passes =
+                    Dict.merge (\_ _ _ -> Debug.crash "LookAngle with no pass")
+                        (\_ angle pass acc -> ( pass, angle ) :: acc)
+                        (\_ _ acc -> acc)
+                        lookAnglesDict
+                        passes
+                        []
+
+                lookAngles =
+                    Result.Extra.unpack (\_ -> [])
+                        newLookAngles
+                        model.passes
             in
-                ( { model | lookAngleTable = lookAngleModel }
-                , Cmd.map LookAngleTable lookAngleCmd
+                ( { model | lookAngles = lookAngles }
+                , Cmd.none
                 )
+
+        LookAngles (Err msg) ->
+            ( { model | lookAngles = [] }
+            , Cmd.none
+            )
 
         LoadMorePasses ->
             let
@@ -210,11 +282,6 @@ update action model =
                 , getPasses from to
                 )
 
-        Fail msg ->
-            ( { model | msg = Present Error msg }
-            , Cmd.none
-            )
-
 
 
 -- View
@@ -223,58 +290,29 @@ update action model =
 view : Model -> Html Msg
 view model =
     let
-        filteredPasses =
-            model.passes
+        filterPasses passes =
+            passes
                 |> Dict.filter (\_ p -> PassFilter.pred model.filter p)
                 |> Dict.toList
-                |> List.map snd
+                |> List.map Tuple.second
+
+        filteredPasses =
+            Result.map filterPasses model.passes
     in
         H.div
             [ HA.class "container"
             , HA.style [ ( "max-width", "980px" ) ]
             ]
-            [ infoBox model.msg
-            , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
+            [ H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Current passes" ]
-            , LookAngleTable.view model.time model.passes model.lookAngleTable
+            , LookAngleTable.view model.time model.lookAngles
             , H.div [ HA.style [ ( "height", "5px" ) ] ] []
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
-                [ H.text "Future passes" ]
-            , App.map Filter (PassFilter.view sats model.filter)
+                [ H.text "All passes" ]
+            , Html.map Filter (PassFilter.view sats model.filter)
             , PassTable.view model.time filteredPasses
             , loadMoreButton
             ]
-
-
-infoBox : UserMsg -> Html a
-infoBox userMsg =
-    case userMsg of
-        Absent ->
-            H.div [] []
-
-        Present level str ->
-            let
-                cssClass =
-                    case level of
-                        Info ->
-                            "bg-info"
-
-                        Warning ->
-                            "bg-warning"
-
-                        Error ->
-                            "bg-danger"
-            in
-                H.p
-                    [ HA.class cssClass
-                    , HA.style
-                        [ ( "padding", "10px" )
-                        , ( "margin-top", "10px" )
-                        , ( "text-align", "center" )
-                        , ( "font-weight", "bold" )
-                        ]
-                    ]
-                    [ H.text str ]
 
 
 loadMoreButton : Html Msg

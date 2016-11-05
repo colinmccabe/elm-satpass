@@ -4,6 +4,7 @@ import Date
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
+import Html.Events.Extra as HEE
 import Json.Decode as JD
 import String
 import Types exposing (..)
@@ -90,7 +91,7 @@ view satList filter =
                 [ H.label [] []
                 , H.button
                     [ HA.class "btn btn-primary"
-                    , HA.type' "submit"
+                    , HA.type_ "submit"
                     , HA.style [ ( "display", "block" ), ( "width", "100%" ) ]
                     , Html.Events.onClick Reset
                     ]
@@ -102,24 +103,19 @@ view satList filter =
 
 slider : String -> (Int -> a) -> ( Int, Int, Int ) -> Int -> Html a
 slider title action ( min, step, max ) currentVal =
-    let
-        decodeEvent =
-            JD.customDecoder (JD.at [ "target", "value" ] JD.string)
-                (String.toInt >> Result.map action)
-    in
-        H.div [ HA.class "form-group" ]
-            [ H.label [] [ H.text title ]
-            , H.input
-                [ HA.type' "range"
-                , HA.min (toString min)
-                , HA.max (toString max)
-                , HA.step (toString step)
-                , HA.value (toString currentVal)
-                , Html.Events.on "input" decodeEvent
-                ]
-                []
-            , H.text (toString currentVal)
+    H.div [ HA.class "form-group" ]
+        [ H.label [] [ H.text title ]
+        , H.input
+            [ HA.type_ "range"
+            , HA.min (toString min)
+            , HA.max (toString max)
+            , HA.step (toString step)
+            , HA.value (toString currentVal)
+            , Html.Events.on "input" (HEE.targetValueInt |> JD.map action)
             ]
+            []
+        , H.text (toString currentVal)
+        ]
 
 
 satNameFilter : Html Msg
