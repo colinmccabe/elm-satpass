@@ -1,6 +1,7 @@
 module Types exposing (..)
 
 import Date
+import Http
 import String
 import Time exposing (Time)
 
@@ -45,3 +46,11 @@ showTime time =
                 |> String.padLeft 2 '0'
     in
         h ++ ":" ++ mm
+
+
+buildUrl : String -> List ( String, String ) -> String
+buildUrl path params =
+    params
+        |> List.map (\( k, v ) -> Http.encodeUri k ++ "=" ++ Http.encodeUri v)
+        |> String.join "&"
+        |> \query -> path ++ "?" ++ query

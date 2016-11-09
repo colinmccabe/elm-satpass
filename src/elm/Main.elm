@@ -21,7 +21,7 @@ import Types exposing (..)
 
 serverHost : String
 serverHost =
-    "beaglebone-arch"
+    "beaglebone"
 
 
 sats : List String
@@ -112,18 +112,18 @@ subs model =
 getPasses : Time -> Time -> Cmd Msg
 getPasses from to =
     let
+        path =
+            "http://" ++ serverHost ++ ":8080/satpass/passes"
+
         queryParams =
-            [ "from=" ++ Http.encodeUri (toString from)
-            , "to=" ++ Http.encodeUri (toString to)
-            , "sats=" ++ Http.encodeUri (String.join "," sats)
-            , "min-el=" ++ Http.encodeUri (toString 5)
+            [ ( "from", toString from )
+            , ( "to", toString to )
+            , ( "min-el", toString 5 )
+            , ( "sats", String.join "," sats )
             ]
 
-        queryString =
-            "?" ++ String.join "&" queryParams
-
         url =
-            "http://" ++ serverHost ++ ":8080/satpass/passes" ++ queryString
+            buildUrl path queryParams
 
         decodePass =
             JD.map8 Pass
@@ -138,7 +138,8 @@ getPasses from to =
     in
         Http.get url (JD.list decodePass)
             |> Http.send
-                (Result.Extra.unpack (\err -> Passes (Err (toString err)))
+                (Result.Extra.unpack
+                    (\err -> Passes (Err (toString err)))
                     (\passes -> Passes (Ok ( to, passes )))
                 )
 
@@ -161,11 +162,15 @@ getLookAngles nameToIdDict =
             satNames =
                 Dict.keys nameToIdDict
 
+            path =
+                "http://" ++ serverHost ++ ":8080/satpass/pos"
+
             queryString =
-                "?sats=" ++ String.join "," (List.map Http.encodeUri satNames)
+                [ ( "sats", String.join "," (List.map Http.encodeUri satNames) )
+                ]
 
             url =
-                "http://" ++ serverHost ++ ":8080/satpass/pos" ++ queryString
+                buildUrl path queryString
 
             decodePos =
                 JD.map2 LookAngle
@@ -184,8 +189,9 @@ getLookAngles nameToIdDict =
         in
             Http.get url (JD.dict decodePos)
                 |> Http.send
-                    (Result.Extra.unpack (LookAngles << Err << toString)
-                        (LookAngles << Ok << swapKeys)
+                    (Result.Extra.unpack
+                        (\err -> LookAngles (Err (toString err)))
+                        (\angles -> LookAngles (Ok (swapKeys angles)))
                     )
 
 

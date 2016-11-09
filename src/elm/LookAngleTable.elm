@@ -2,27 +2,32 @@ port module LookAngleTable exposing (view)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import List
 import Time exposing (Time)
 import Types exposing (..)
 
 
 view : Time -> List ( Pass, LookAngle ) -> Html a
-view time lookAngles =
-    case lookAngles of
-        [] ->
-            p [ style [ ( "text-align", "center" ) ] ]
-                [ text "None" ]
+view time unsortedLookAngles =
+    let
+        lookAngles =
+            List.sortBy (\( pass, _ ) -> pass.startTime) unsortedLookAngles
+    in
+        case lookAngles of
+            [] ->
+                p [ style [ ( "text-align", "center" ) ] ]
+                    [ text "None" ]
 
-        _ ->
-            div []
-                [ table
-                    [ class "table"
-                    , style [ ( "text-align", "center" ) ]
+            _ ->
+                div []
+                    [ table
+                        [ class "table"
+                        , style [ ( "text-align", "center" ) ]
+                        ]
+                        [ tableHead
+                        , tbody [] (List.map (passRow time) lookAngles)
+                        ]
                     ]
-                    [ tableHead
-                    , tbody [] (List.map (passRow time) lookAngles)
-                    ]
-                ]
 
 
 tableHead : Html a
