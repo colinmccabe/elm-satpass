@@ -2,7 +2,6 @@ module Types exposing (..)
 
 import Date
 import Http
-import String
 import Time exposing (Time)
 
 

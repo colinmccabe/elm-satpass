@@ -12,10 +12,8 @@ import LookAngleTable
 import PassFilter
 import PassTable
 import Result.Extra
-import String
 import Task exposing (Task)
 import Time exposing (Time)
-import Tuple
 import Types exposing (..)
 
 
