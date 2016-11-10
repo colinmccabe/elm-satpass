@@ -3,7 +3,6 @@ port module Main exposing (main)
 import Dict exposing (Dict)
 import Geolocation exposing (Location)
 import Html as H exposing (Html)
-import Html.App as App
 import Html.Attributes as HA
 import Html.Events
 import Html.Lazy
@@ -11,14 +10,16 @@ import Http
 import LookAngleTable
 import PassFilter
 import PassTable
+import Result.Extra
 import Task exposing (Task)
 import Time exposing (Time)
+import Tuple
 import Types exposing (..)
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-    App.program
+    H.program
         { init = init context
         , update = update context
         , view = Html.Lazy.lazy (view context)
@@ -100,7 +101,7 @@ init context =
 
 type Msg
     = Timestamp Time
-    | Location (Maybe Location)
+    | Location (Result Geolocation.Error Location)
     | TleString String
     | Passes ( Time, List Pass )
     | Filter PassFilter.Msg
@@ -116,7 +117,7 @@ type Msg
 
 getTimestamp : Cmd Msg
 getTimestamp =
-    Time.now |> Task.mapError toString |> Task.perform Fail Timestamp
+    Time.now |> Task.perform Timestamp
 
 
 getLocation : Cmd Msg
@@ -126,15 +127,13 @@ getLocation =
         , timeout = Just 10000
         , maximumAge = Just (48 * 3600000)
         }
-        |> Task.toMaybe
-        |> Task.perform Fail Location
+        |> Task.attempt Location
 
 
 getTles : List SatName -> Cmd Msg
 getTles sats =
     Http.getString "nasabare.txt"
-        |> Task.mapError toString
-        |> Task.perform Fail TleString
+        |> Http.send (Result.Extra.unpack (toString >> Fail) TleString)
 
 
 type alias PassReq =
@@ -205,7 +204,7 @@ update context action model =
             , getLocation
             )
 
-        Location (Just location) ->
+        Location (Ok location) ->
             ( { model
                 | location = location
                 , geoMsg = Absent
@@ -214,7 +213,7 @@ update context action model =
             , getTles context.sats
             )
 
-        Location Nothing ->
+        Location (Err _) ->
             ( { model
                 | geoMsg = Present Warning "Warning: Geolocation failed, fell back to 0°N, 0°E"
                 , msg = Present Info "Getting TLEs..."
@@ -227,14 +226,14 @@ update context action model =
                 tles =
                     parseTle context.sats tleStr
 
-                model' =
+                model_ =
                     { model
                         | tles = tles
                         , msg = Present Info "Getting passes..."
                     }
             in
-                ( model'
-                , sendPassReq (nextPassReq context.loadMoreInterval model')
+                ( model_
+                , sendPassReq (nextPassReq context.loadMoreInterval model_)
                 )
 
         Passes ( endTime, newPasses ) ->
@@ -293,7 +292,7 @@ view context model =
             model.passes
                 |> Dict.filter (\_ p -> PassFilter.pred model.filter p)
                 |> Dict.toList
-                |> List.map snd
+                |> List.map Tuple.second
     in
         H.div
             [ HA.class "container"
@@ -307,7 +306,7 @@ view context model =
             , H.div [ HA.style [ ( "height", "5px" ) ] ] []
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Future passes" ]
-            , App.map Filter (PassFilter.view context.sats model.filter)
+            , H.map Filter (PassFilter.view context.sats model.filter)
             , PassTable.view model.time filteredPasses
             , loadMoreButton
             ]

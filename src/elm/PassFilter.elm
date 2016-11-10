@@ -5,6 +5,7 @@ import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
 import Json.Decode as JD
+import Result.Extra
 import String
 import Types exposing (..)
 
@@ -90,7 +91,7 @@ view satList filter =
                 [ H.label [] []
                 , H.button
                     [ HA.class "btn btn-primary"
-                    , HA.type' "submit"
+                    , HA.type_ "submit"
                     , HA.style [ ( "display", "block" ), ( "width", "100%" ) ]
                     , Html.Events.onClick Reset
                     ]
@@ -104,13 +105,15 @@ slider : String -> (Int -> a) -> ( Int, Int, Int ) -> Int -> Html a
 slider title action ( min, step, max ) currentVal =
     let
         decodeEvent =
-            JD.customDecoder (JD.at [ "target", "value" ] JD.string)
-                (String.toInt >> Result.map action)
+            Html.Events.targetValue
+                |> JD.map String.toInt
+                |> JD.andThen (Result.Extra.unpack JD.fail JD.succeed)
+                |> JD.map action
     in
         H.div [ HA.class "form-group" ]
             [ H.label [] [ H.text title ]
             , H.input
-                [ HA.type' "range"
+                [ HA.type_ "range"
                 , HA.min (toString min)
                 , HA.max (toString max)
                 , HA.step (toString step)

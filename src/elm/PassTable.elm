@@ -1,7 +1,6 @@
 module PassTable exposing (view)
 
 import Date exposing (Date)
-import Date.Format
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Time exposing (Time)
@@ -32,18 +31,18 @@ view time passes =
 tableHead : Html a
 tableHead =
     let
-        th' txt =
+        th_ txt =
             th [ style [ ( "text-align", "center" ) ] ]
                 [ text txt ]
     in
         thead []
             [ tr []
-                [ th' "Day"
-                , th' "Date"
-                , th' "Satellite"
-                , th' "Max El"
-                , th' "Start → Apogee → End"
-                , th' "Az"
+                [ th_ "Day"
+                , th_ "Date"
+                , th_ "Satellite"
+                , th_ "Max El"
+                , th_ "Start → Apogee → End"
+                , th_ "Az"
                 ]
             ]
 
@@ -63,33 +62,30 @@ passRow time pass =
             else
                 ""
 
-        td' str =
+        td_ str =
             td [] [ (text str) ]
 
         showDegrees deg =
             deg |> ceiling |> toString |> (\s -> s ++ "°")
 
         dayStr =
-            Date.fromTime >> Date.Format.format "%a"
+            Date.fromTime >> Date.dayOfWeek >> toString
 
         dateStr =
-            Date.fromTime >> Date.Format.format "%m/%d"
-
-        timeStr =
-            Date.fromTime >> Date.Format.format "%k:%M"
+            Date.fromTime >> \d -> (toString (Date.month d)) ++ " " ++ (toString (Date.day d))
 
         startApogeeEnd =
-            timeStr pass.startTime
+            showTime pass.startTime
                 ++ " → "
-                ++ timeStr pass.apogeeTime
+                ++ showTime pass.apogeeTime
                 ++ " → "
-                ++ timeStr pass.endTime
+                ++ showTime pass.endTime
     in
         tr [ class rowClass ]
-            [ td' (dayStr pass.startTime)
-            , td' (dateStr pass.startTime)
+            [ td_ (dayStr pass.startTime)
+            , td_ (dateStr pass.startTime)
             , td [] [ strong [] [ text pass.satName ] ]
-            , td' (showDegrees pass.maxEl)
-            , td' startApogeeEnd
-            , td' (showDegrees pass.startAz ++ " → " ++ showDegrees pass.endAz)
+            , td_ (showDegrees pass.maxEl)
+            , td_ startApogeeEnd
+            , td_ (showDegrees pass.startAz ++ " → " ++ showDegrees pass.endAz)
             ]

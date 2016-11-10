@@ -8,14 +8,13 @@ port module LookAngleTable
         , subs
         )
 
-import Date
 import Dict exposing (Dict)
 import Geolocation
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Platform.Cmd exposing (Cmd)
-import String
 import Time exposing (Time)
+import Tuple
 import Types exposing (..)
 
 
@@ -74,7 +73,7 @@ nextReq { location, tles, passes } time =
     in
         passes
             |> Dict.toList
-            |> List.map snd
+            |> List.map Tuple.second
             |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
             |> List.filterMap idTleRecord
             |> (\sats ->
@@ -164,20 +163,20 @@ view time passes lookAngles =
 tableHead : Html a
 tableHead =
     let
-        th' txt =
+        th_ txt =
             th [ style [ ( "text-align", "center" ) ] ]
                 [ text txt ]
     in
         thead []
             [ tr []
-                [ th' "Satellite"
-                , th' "El"
-                , th' "Start"
-                , th' "Apogee"
-                , th' "End"
-                , th' "Start Az"
-                , th' "Az"
-                , th' "End Az"
+                [ th_ "Satellite"
+                , th_ "El"
+                , th_ "Start"
+                , th_ "Apogee"
+                , th_ "End"
+                , th_ "Start Az"
+                , th_ "Az"
+                , th_ "End Az"
                 ]
             ]
 
@@ -185,25 +184,11 @@ tableHead =
 passRow : Time -> ( LookAngle, Pass ) -> Html a
 passRow time ( lookAngle, pass ) =
     let
-        td' str =
+        td_ str =
             td [] [ (text str) ]
 
         showDegrees deg =
             deg |> ceiling |> toString |> \s -> s ++ "°"
-
-        showTime time =
-            let
-                h =
-                    time |> Date.fromTime |> Date.hour |> toString
-
-                mm =
-                    time
-                        |> Date.fromTime
-                        |> Date.minute
-                        |> toString
-                        |> String.padLeft 2 '0'
-            in
-                h ++ ":" ++ mm
 
         risingSettingArrow =
             if time <= pass.apogeeTime then
@@ -223,11 +208,11 @@ passRow time ( lookAngle, pass ) =
     in
         tr [ class rowClass ]
             [ td [] [ strong [] [ text pass.satName ] ]
-            , td' elText
-            , td' (showTime pass.startTime)
-            , td' (showTime pass.apogeeTime)
-            , td' (showTime pass.endTime)
-            , td' (showDegrees pass.startAz)
-            , td' (showDegrees lookAngle.azimuth)
-            , td' (showDegrees pass.endAz)
+            , td_ elText
+            , td_ (showTime pass.startTime)
+            , td_ (showTime pass.apogeeTime)
+            , td_ (showTime pass.endTime)
+            , td_ (showDegrees pass.startAz)
+            , td_ (showDegrees lookAngle.azimuth)
+            , td_ (showDegrees pass.endAz)
             ]

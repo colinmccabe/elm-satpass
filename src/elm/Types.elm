@@ -1,5 +1,6 @@
 module Types exposing (..)
 
+import Date
 import Dict exposing (Dict)
 import String
 import Time exposing (Time)
@@ -65,3 +66,19 @@ groupTleLines sats lines =
 
         _ ->
             []
+
+
+showTime : Time -> String
+showTime time =
+    let
+        h =
+            time |> Date.fromTime |> Date.hour |> toString
+
+        mm =
+            time
+                |> Date.fromTime
+                |> Date.minute
+                |> toString
+                |> String.padLeft 2 '0'
+    in
+        h ++ ":" ++ mm
