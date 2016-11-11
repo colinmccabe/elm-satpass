@@ -2,7 +2,6 @@ module Types exposing (..)
 
 import Date
 import Dict exposing (Dict)
-import String
 import Time exposing (Time)
 
 

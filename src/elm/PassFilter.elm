@@ -6,7 +6,6 @@ import Html.Attributes as HA
 import Html.Events
 import Json.Decode as JD
 import Result.Extra
-import String
 import Types exposing (..)
 
 

@@ -14,7 +14,6 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Platform.Cmd exposing (Cmd)
 import Time exposing (Time)
-import Tuple
 import Types exposing (..)
 
 
@@ -61,32 +60,7 @@ type alias LookAngleReq =
     }
 
 
-port sendLookAngleReq : LookAngleReq -> Cmd msg
-
-
-nextReq : Context a -> Time -> LookAngleReq
-nextReq { location, tles, passes } time =
-    let
-        idTleRecord pass =
-            Dict.get pass.satName tles
-                |> Maybe.map (\tle -> { id = pass.passId, tle = tle })
-    in
-        passes
-            |> Dict.toList
-            |> List.map Tuple.second
-            |> List.filter (\pass -> time > pass.startTime && time < pass.endTime)
-            |> List.filterMap idTleRecord
-            |> (\sats ->
-                    { time = time
-                    , latitude = location.latitude
-                    , longitude = location.longitude
-                    , altitude =
-                        location.altitude
-                            |> Maybe.map .value
-                            |> Maybe.withDefault 0.0
-                    , sats = sats
-                    }
-               )
+port getLookAngles : LookAngleReq -> Cmd msg
 
 
 
@@ -113,7 +87,7 @@ update context action model =
     case action of
         Tick time ->
             ( model
-            , sendLookAngleReq (nextReq context time)
+            , getLookAngles (nextReq context time)
             )
 
         LookAngles lookAngles ->
@@ -126,6 +100,30 @@ update context action model =
                 ( newModel
                 , Cmd.none
                 )
+
+
+nextReq : Context a -> Time -> LookAngleReq
+nextReq { location, tles, passes } time =
+    let
+        idTleRecord pass =
+            Dict.get pass.satName tles
+                |> Maybe.map (\tle -> { id = pass.passId, tle = tle })
+    in
+        passes
+            |> Dict.filter (\_ pass -> time > pass.startTime && time < pass.endTime)
+            |> Dict.values
+            |> List.filterMap idTleRecord
+            |> (\sats ->
+                    { time = time
+                    , latitude = location.latitude
+                    , longitude = location.longitude
+                    , altitude =
+                        location.altitude
+                            |> Maybe.map .value
+                            |> Maybe.withDefault 0.0
+                    , sats = sats
+                    }
+               )
 
 
 

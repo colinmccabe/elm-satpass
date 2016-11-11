@@ -13,7 +13,6 @@ import PassTable
 import Result.Extra
 import Task exposing (Task)
 import Time exposing (Time)
-import Tuple
 import Types exposing (..)
 
 
@@ -146,31 +145,7 @@ type alias PassReq =
     }
 
 
-port sendPassReq : PassReq -> Cmd msg
-
-
-nextPassReq : Time -> Model -> PassReq
-nextPassReq loadMoreInterval { location, tles, loadedUpTo } =
-    tles
-        |> Dict.toList
-        |> List.map
-            (\( satName, tle ) ->
-                { satName = satName
-                , tle = tle
-                }
-            )
-        |> (\sats ->
-                { latitude = location.latitude
-                , longitude = location.longitude
-                , altitude =
-                    location.altitude
-                        |> Maybe.map .value
-                        |> Maybe.withDefault 0.0
-                , begin = loadedUpTo
-                , end = loadedUpTo + loadMoreInterval
-                , sats = sats
-                }
-           )
+port getPasses : PassReq -> Cmd msg
 
 
 
@@ -233,7 +208,7 @@ update context action model =
                     }
             in
                 ( model_
-                , sendPassReq (nextPassReq context.loadMoreInterval model_)
+                , getPasses (nextPassReq context.loadMoreInterval model_)
                 )
 
         Passes ( endTime, newPasses ) ->
@@ -272,13 +247,37 @@ update context action model =
 
         LoadMorePasses ->
             ( model
-            , sendPassReq (nextPassReq context.loadMoreInterval model)
+            , getPasses (nextPassReq context.loadMoreInterval model)
             )
 
         Fail msg ->
             ( { model | msg = Present Error msg }
             , Cmd.none
             )
+
+
+nextPassReq : Time -> Model -> PassReq
+nextPassReq loadMoreInterval { location, tles, loadedUpTo } =
+    tles
+        |> Dict.toList
+        |> List.map
+            (\( satName, tle ) ->
+                { satName = satName
+                , tle = tle
+                }
+            )
+        |> (\sats ->
+                { latitude = location.latitude
+                , longitude = location.longitude
+                , altitude =
+                    location.altitude
+                        |> Maybe.map .value
+                        |> Maybe.withDefault 0.0
+                , begin = loadedUpTo
+                , end = loadedUpTo + loadMoreInterval
+                , sats = sats
+                }
+           )
 
 
 
