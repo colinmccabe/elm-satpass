@@ -19,14 +19,21 @@ import Types exposing (..)
 main : Program Never Model Msg
 main =
     H.program
-        { init = init context
-        , update = update context
-        , view = Html.Lazy.lazy (view context)
-        , subscriptions = subs
+        { init = init
+        , update = update
+        , view = Html.Lazy.lazy view
+        , subscriptions =
+            (\_ ->
+                Sub.batch
+                    [ recvPasses Passes
+                    , Time.every Time.second Tick
+                    , recvLookAngles LookAngles
+                    ]
+            )
         }
 
 
-type alias Context =
+type alias Constants =
     { history : Time
     , loadMoreInterval : Time
     , defaultLocation : Location
@@ -34,8 +41,8 @@ type alias Context =
     }
 
 
-context : Context
-context =
+constants : Constants
+constants =
     { history = 1 * Time.hour
     , loadMoreInterval = 16 * Time.hour
     , defaultLocation =
@@ -76,23 +83,23 @@ type alias Model =
     , time : Time
     , tles : Dict SatName Tle
     , passes : Dict PassId Pass
+    , lookAngles : Dict PassId LookAngle
     , loadedUpTo : Time
     , filter : PassFilter.Model
-    , lookAngleTable : LookAngleTable.Model
     }
 
 
-init : Context -> ( Model, Cmd Msg )
-init context =
-    ( { geoMsg = Absent
-      , msg = Present Info "Trying to get location..."
-      , location = context.defaultLocation
+init : ( Model, Cmd Msg )
+init =
+    ( { geoMsg = Hide
+      , msg = Show Info "Trying to get location..."
+      , location = constants.defaultLocation
       , time = 0.0
       , tles = Dict.empty
       , passes = Dict.empty
+      , lookAngles = Dict.empty
       , loadedUpTo = 0.0
       , filter = PassFilter.init
-      , lookAngleTable = LookAngleTable.init
       }
     , getTimestamp
     )
@@ -103,9 +110,9 @@ type Msg
     | Location (Result Geolocation.Error Location)
     | TleString String
     | Passes ( Time, List Pass )
+    | LookAngles (List LookAngle)
     | Filter PassFilter.Msg
     | Tick Time
-    | LookAngleTable LookAngleTable.Msg
     | LoadMorePasses
     | Fail String
 
@@ -148,6 +155,18 @@ type alias PassReq =
 port getPasses : PassReq -> Cmd msg
 
 
+type alias LookAngleReq =
+    { time : Time
+    , latitude : Float
+    , longitude : Float
+    , altitude : Float
+    , sats : List { id : PassId, tle : Tle }
+    }
+
+
+port getLookAngles : LookAngleReq -> Cmd msg
+
+
 
 -- Subs
 
@@ -155,26 +174,20 @@ port getPasses : PassReq -> Cmd msg
 port recvPasses : (( Time, List Pass ) -> msg) -> Sub msg
 
 
-subs : Model -> Sub Msg
-subs model =
-    Sub.batch
-        [ recvPasses Passes
-        , Time.every Time.second Tick
-        , Sub.map LookAngleTable (LookAngleTable.subs model.lookAngleTable)
-        ]
+port recvLookAngles : (List LookAngle -> msg) -> Sub msg
 
 
 
 -- Update
 
 
-update : Context -> Msg -> Model -> ( Model, Cmd Msg )
-update context action model =
+update : Msg -> Model -> ( Model, Cmd Msg )
+update action model =
     case action of
         Timestamp time ->
             ( { model
                 | time = time
-                , loadedUpTo = time - context.history
+                , loadedUpTo = time - constants.history
               }
             , getLocation
             )
@@ -182,33 +195,33 @@ update context action model =
         Location (Ok location) ->
             ( { model
                 | location = location
-                , geoMsg = Absent
-                , msg = Present Info "Getting TLEs..."
+                , geoMsg = Hide
+                , msg = Show Info "Getting TLEs..."
               }
-            , getTles context.sats
+            , getTles constants.sats
             )
 
         Location (Err _) ->
             ( { model
-                | geoMsg = Present Warning "Warning: Geolocation failed, fell back to 0°N, 0°E"
-                , msg = Present Info "Getting TLEs..."
+                | geoMsg = Show Warning "Warning: Geolocation failed, fell back to 0°N, 0°E"
+                , msg = Show Info "Getting TLEs..."
               }
-            , getTles context.sats
+            , getTles constants.sats
             )
 
         TleString tleStr ->
             let
                 tles =
-                    parseTle context.sats tleStr
+                    parseTle constants.sats tleStr
 
                 model_ =
                     { model
                         | tles = tles
-                        , msg = Present Info "Getting passes..."
+                        , msg = Show Info "Getting passes..."
                     }
             in
                 ( model_
-                , getPasses (nextPassReq context.loadMoreInterval model_)
+                , getPasses (nextPassReq constants.loadMoreInterval model_)
                 )
 
         Passes ( endTime, newPasses ) ->
@@ -221,7 +234,7 @@ update context action model =
                 ( { model
                     | passes = Dict.union model.passes newPassesDict
                     , loadedUpTo = endTime
-                    , msg = Absent
+                    , msg = Hide
                   }
                 , Cmd.none
                 )
@@ -233,31 +246,33 @@ update context action model =
 
         Tick time ->
             ( { model | time = time }
-            , Cmd.none
+            , getLookAngles (nextLookAngleReq model time)
             )
 
-        LookAngleTable childMsg ->
+        LookAngles lookAnglesList ->
             let
-                ( lookAngleModel, lookAngleCmd ) =
-                    LookAngleTable.update model childMsg model.lookAngleTable
+                lookAngles =
+                    lookAnglesList
+                        |> List.map (\angle -> ( angle.id, angle ))
+                        |> Dict.fromList
             in
-                ( { model | lookAngleTable = lookAngleModel }
-                , Cmd.map LookAngleTable lookAngleCmd
+                ( { model | lookAngles = lookAngles }
+                , Cmd.none
                 )
 
         LoadMorePasses ->
             ( model
-            , getPasses (nextPassReq context.loadMoreInterval model)
+            , getPasses (nextPassReq constants.loadMoreInterval model)
             )
 
         Fail msg ->
-            ( { model | msg = Present Error msg }
+            ( { model | msg = Show Error msg }
             , Cmd.none
             )
 
 
 nextPassReq : Time -> Model -> PassReq
-nextPassReq loadMoreInterval { location, tles, loadedUpTo } =
+nextPassReq interval { location, tles, loadedUpTo } =
     tles
         |> Dict.toList
         |> List.map
@@ -274,24 +289,47 @@ nextPassReq loadMoreInterval { location, tles, loadedUpTo } =
                         |> Maybe.map .value
                         |> Maybe.withDefault 0.0
                 , begin = loadedUpTo
-                , end = loadedUpTo + loadMoreInterval
+                , end = loadedUpTo + interval
                 , sats = sats
                 }
            )
+
+
+nextLookAngleReq : Model -> Time -> LookAngleReq
+nextLookAngleReq { location, tles, passes } time =
+    let
+        idTleRecord pass =
+            Dict.get pass.satName tles
+                |> Maybe.map (\tle -> { id = pass.passId, tle = tle })
+    in
+        passes
+            |> Dict.filter (\_ pass -> time > pass.startTime && time < pass.endTime)
+            |> Dict.values
+            |> List.filterMap idTleRecord
+            |> (\sats ->
+                    { time = time
+                    , latitude = location.latitude
+                    , longitude = location.longitude
+                    , altitude =
+                        location.altitude
+                            |> Maybe.map .value
+                            |> Maybe.withDefault 0.0
+                    , sats = sats
+                    }
+               )
 
 
 
 -- View
 
 
-view : Context -> Model -> Html Msg
-view context model =
+view : Model -> Html Msg
+view model =
     let
         filteredPasses =
             model.passes
                 |> Dict.filter (\_ p -> PassFilter.pred model.filter p)
-                |> Dict.toList
-                |> List.map Tuple.second
+                |> Dict.values
     in
         H.div
             [ HA.class "container"
@@ -301,11 +339,11 @@ view context model =
             , infoBox model.msg
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Current passes" ]
-            , LookAngleTable.view model.time model.passes model.lookAngleTable
+            , LookAngleTable.view model.time model.passes model.lookAngles
             , H.div [ HA.style [ ( "height", "5px" ) ] ] []
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Future passes" ]
-            , H.map Filter (PassFilter.view context.sats model.filter)
+            , H.map Filter (PassFilter.view constants.sats model.filter)
             , PassTable.view model.time filteredPasses
             , loadMoreButton
             ]
@@ -314,10 +352,10 @@ view context model =
 infoBox : UserMsg -> Html a
 infoBox userMsg =
     case userMsg of
-        Absent ->
+        Hide ->
             H.div [] []
 
-        Present level str ->
+        Show level str ->
             let
                 cssClass =
                     case level of

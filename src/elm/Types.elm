@@ -6,8 +6,8 @@ import Time exposing (Time)
 
 
 type UserMsg
-    = Present Level String
-    | Absent
+    = Show Level String
+    | Hide
 
 
 type Level
@@ -43,6 +43,14 @@ type alias Pass =
     , endTime : Time
     , startAz : Deg
     , endAz : Deg
+    }
+
+
+type alias LookAngle =
+    { id : PassId
+    , elevation : Deg
+    , azimuth : Deg
+    , dopplerFactor : Float
     }
 
 
