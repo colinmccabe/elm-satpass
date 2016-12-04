@@ -57,8 +57,8 @@ update msg model =
             init
 
 
-view : List SatName -> Model -> Html Msg
-view satList filter =
+view : Model -> Html Msg
+view filter =
     H.div []
         [ H.div
             [ HA.class "row"

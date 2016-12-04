@@ -63,13 +63,13 @@ parseTle sats rawTle =
 
 
 groupTleLines : List SatName -> List String -> List ( SatName, Tle )
-groupTleLines sats lines =
+groupTleLines blacklist lines =
     case lines of
         satName :: tle1 :: tle2 :: rest ->
-            if List.member satName sats then
-                ( satName, { line1 = tle1, line2 = tle2 } ) :: groupTleLines sats rest
+            if not (List.member satName blacklist) then
+                ( satName, { line1 = tle1, line2 = tle2 } ) :: groupTleLines blacklist rest
             else
-                groupTleLines sats rest
+                groupTleLines blacklist rest
 
         _ ->
             []

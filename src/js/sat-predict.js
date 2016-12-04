@@ -40,6 +40,9 @@ window.SatPredict = (function() {
         date.getUTCSeconds()
     );
 
+    if (satrec.error !== 0)
+      throw Error('error #' + satrec.error + ' calculating position and velocity');
+
     return {
       position: satellite.eciToEcf(pvEci.position, gmst),
       velocity: satellite.eciToEcf(pvEci.velocity, gmst)
@@ -187,7 +190,12 @@ window.SatPredict = (function() {
     var passes = [];
 
     req.sats.forEach(function (sat) {
-      var satPasses = passesForSat(sat.tle.line1, sat.tle.line2, req);
+      try {
+        var satPasses = passesForSat(sat.tle.line1, sat.tle.line2, req);
+      } catch (e) {
+        console.warn('Could not get passes for ' + sat.satName + ': ' + e.message);
+        return;
+      }
 
       satPasses.forEach(function (pass) {
         var approxStartTime = Math.floor(pass.startTime / 10000);

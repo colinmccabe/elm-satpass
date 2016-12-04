@@ -37,14 +37,14 @@ type alias Constants =
     { history : Time
     , loadMoreInterval : Time
     , defaultLocation : Location
-    , sats : List SatName
+    , blacklist : List SatName
     }
 
 
 constants : Constants
 constants =
     { history = 1 * Time.hour
-    , loadMoreInterval = 16 * Time.hour
+    , loadMoreInterval = 6 * Time.hour
     , defaultLocation =
         { latitude = 0.0
         , longitude = 0.0
@@ -53,25 +53,16 @@ constants =
         , movement = Nothing
         , timestamp = 0.0
         }
-    , sats =
-        [ "AO-85"
-        , "CO-55"
-        , "CO-57"
-        , "CO-58"
-        , "CO-65"
-        , "CO-66"
-        , "FO-29"
-        , "ISS"
-        , "LILACSAT-2"
-        , "NO-44"
-        , "NO-84"
-        , "SO-50"
-        , "UKUBE-1"
-        , "XW-2A"
-        , "XW-2B"
-        , "XW-2C"
-        , "XW-2D"
-        , "XW-2F"
+    , blacklist =
+        [ "GomX-3"
+        , "OBJECT B"
+        , "OBJECT C"
+        , "OBJECT D"
+        , "OBJECT E"
+        , "OBJECT F"
+        , "OBJECT J"
+        , "OBJECT K"
+        , "Pegasus-1"
         ]
     }
 
@@ -136,8 +127,8 @@ getLocation =
         |> Task.attempt Location
 
 
-getTles : List SatName -> Cmd Msg
-getTles sats =
+getTles : Cmd Msg
+getTles =
     Http.getString "nasabare.txt"
         |> Http.send (Result.Extra.unpack (toString >> Fail) TleString)
 
@@ -198,7 +189,7 @@ update action model =
                 , geoMsg = Hide
                 , msg = Show Info "Getting TLEs..."
               }
-            , getTles constants.sats
+            , getTles
             )
 
         Location (Err _) ->
@@ -206,13 +197,13 @@ update action model =
                 | geoMsg = Show Warning "Warning: Geolocation failed, fell back to 0°N, 0°E"
                 , msg = Show Info "Getting TLEs..."
               }
-            , getTles constants.sats
+            , getTles
             )
 
         TleString tleStr ->
             let
                 tles =
-                    parseTle constants.sats tleStr
+                    parseTle constants.blacklist tleStr
 
                 model_ =
                     { model
@@ -343,7 +334,7 @@ view model =
             , H.div [ HA.style [ ( "height", "5px" ) ] ] []
             , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
                 [ H.text "Future passes" ]
-            , H.map Filter (PassFilter.view constants.sats model.filter)
+            , H.map Filter (PassFilter.view model.filter)
             , PassTable.view model.time filteredPasses
             , loadMoreButton
             ]
