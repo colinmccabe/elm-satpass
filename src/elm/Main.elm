@@ -43,7 +43,7 @@ type alias Constants =
 
 constants : Constants
 constants =
-    { history = 1 * Time.hour
+    { history = 30 * Time.minute
     , loadMoreInterval = 6 * Time.hour
     , defaultLocation =
         { latitude = 0.0
