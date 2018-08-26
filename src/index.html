@@ -10,11 +10,12 @@
 </head>
 <body>
 <script>
-  var app = Elm.Main.fullscreen();
+  var app = Elm.Main.init();
 
   app.ports.getPasses.subscribe(function (req) {
     setTimeout(function () {
-      app.ports.recvPasses.send(SatPredict.getPasses(req));
+      var resp = SatPredict.getPasses(req);
+      app.ports.recvPasses.send(resp);
     }, 0);
   });
 

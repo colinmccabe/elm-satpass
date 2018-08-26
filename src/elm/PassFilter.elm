@@ -1,11 +1,10 @@
 module PassFilter exposing (Model, Msg, init, update, view, pred)
 
-import Date
+import Time
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
 import Json.Decode as JD
-import Result.Extra
 import Types exposing (..)
 
 
@@ -62,7 +61,7 @@ view filter =
     H.div []
         [ H.div
             [ HA.class "row"
-            , HA.style [ ( "margin-top", "15px" ) ]
+            , HA.style "margin-top" "15px"
             ]
             [ H.div [ HA.class "col-xs-6" ]
                 [ slider "Start hour"
@@ -91,7 +90,8 @@ view filter =
                 , H.button
                     [ HA.class "btn btn-primary"
                     , HA.type_ "submit"
-                    , HA.style [ ( "display", "block" ), ( "width", "100%" ) ]
+                    , HA.style "display" "block"
+                    , HA.style "width" "100%"
                     , Html.Events.onClick Reset
                     ]
                     [ H.text "Reset" ]
@@ -106,21 +106,25 @@ slider title action ( min, step, max ) currentVal =
         decodeEvent =
             Html.Events.targetValue
                 |> JD.map String.toInt
-                |> JD.andThen (Result.Extra.unpack JD.fail JD.succeed)
+                |> JD.andThen ( \maybeInt ->
+                    case maybeInt of
+                        Just i -> JD.succeed i
+                        Nothing -> JD.fail "Failed to convert slider target to int"
+                )
                 |> JD.map action
     in
         H.div [ HA.class "form-group" ]
             [ H.label [] [ H.text title ]
             , H.input
                 [ HA.type_ "range"
-                , HA.min (toString min)
-                , HA.max (toString max)
-                , HA.step (toString step)
-                , HA.value (toString currentVal)
+                , HA.min (String.fromInt min)
+                , HA.max (String.fromInt max)
+                , HA.step (String.fromInt step)
+                , HA.value (String.fromInt currentVal)
                 , Html.Events.on "input" decodeEvent
                 ]
                 []
-            , H.text (toString currentVal)
+            , H.text (String.fromInt currentVal)
             ]
 
 
@@ -143,10 +147,11 @@ satNameFilter =
 
 pred : Model -> (Pass -> Bool)
 pred filter pass =
-    List.all identity
-        [ Date.hour (Date.fromTime pass.startTime) >= filter.afterHour
-        , Date.hour (Date.fromTime pass.startTime) <= filter.beforeHour
-        , (ceiling pass.maxEl) >= (floor filter.minEl)
-        , String.contains (String.toUpper filter.satName)
-            (String.toUpper pass.satName)
-        ]
+    let startHour = Time.toHour Time.utc (Time.millisToPosix pass.startTime)
+    in
+        List.all identity
+            [ startHour >= filter.afterHour
+            , startHour <= filter.beforeHour
+            , (ceiling pass.maxEl) >= (floor filter.minEl)
+            , String.contains (String.toUpper filter.satName) (String.toUpper pass.satName)
+            ]

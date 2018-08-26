@@ -1,13 +1,12 @@
 module PassTable exposing (view)
 
-import Date exposing (Date)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Time exposing (Time)
+import Time
 import Types exposing (..)
 
 
-view : Time -> List Pass -> Html a
+view : Timestamp -> List Pass -> Html a
 view time passes =
     let
         sortedPasses =
@@ -15,13 +14,13 @@ view time passes =
     in
         case sortedPasses of
             [] ->
-                p [ style [ ( "text-align", "center" ) ] ]
+                p [ style "text-align" "center" ]
                     [ text "No passes" ]
 
             _ ->
                 table
                     [ class "table"
-                    , style [ ( "text-align", "center" ) ]
+                    , style "text-align" "center"
                     ]
                     [ tableHead
                     , tbody [] (List.map (passRow time) sortedPasses)
@@ -32,7 +31,7 @@ tableHead : Html a
 tableHead =
     let
         th_ txt =
-            th [ style [ ( "text-align", "center" ) ] ]
+            th [ style "text-align" "center" ]
                 [ text txt ]
     in
         thead []
@@ -47,7 +46,7 @@ tableHead =
             ]
 
 
-passRow : Time -> Pass -> Html a
+passRow : Timestamp -> Pass -> Html a
 passRow time pass =
     let
         rowClass =
@@ -66,13 +65,10 @@ passRow time pass =
             td [] [ (text str) ]
 
         showDegrees deg =
-            deg |> ceiling |> toString |> (\s -> s ++ "°")
+            deg |> ceiling |> String.fromInt |> (\s -> s ++ "°")
 
         dayStr =
-            Date.fromTime >> Date.dayOfWeek >> toString
-
-        dateStr =
-            Date.fromTime >> \d -> (toString (Date.month d)) ++ " " ++ (toString (Date.day d))
+            Time.millisToPosix >> Time.toWeekday Time.utc >> Debug.toString
 
         startApogeeEnd =
             showTime pass.startTime
@@ -89,3 +85,9 @@ passRow time pass =
             , td_ startApogeeEnd
             , td_ (showDegrees pass.startAz ++ " → " ++ showDegrees pass.endAz)
             ]
+
+dateStr t =
+    let
+        p = Time.millisToPosix t
+    in
+        (Debug.toString (Time.toMonth Time.utc p)) ++ " " ++ (Debug.toString (Time.toDay Time.utc p))

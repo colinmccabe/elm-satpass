@@ -1,7 +1,8 @@
 port module Main exposing (main)
 
+import Browser
+import Debug
 import Dict exposing (Dict)
-import Geolocation exposing (Location)
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
@@ -10,23 +11,22 @@ import Http
 import LookAngleTable
 import PassFilter
 import PassTable
-import Result.Extra
 import Task exposing (Task)
-import Time exposing (Time)
+import Time
 import Types exposing (..)
 
 
-main : Program Never Model Msg
+main : Program () Model Msg
 main =
-    H.program
-        { init = init
+    Browser.document
+        { init = \_ -> init
         , update = update
-        , view = Html.Lazy.lazy view
+        , view = view
         , subscriptions =
             (\_ ->
                 Sub.batch
                     [ recvPasses Passes
-                    , Time.every Time.second Tick
+                    , Time.every 1000 Tick
                     , recvLookAngles LookAngles
                     ]
             )
@@ -34,8 +34,8 @@ main =
 
 
 type alias Constants =
-    { history : Time
-    , loadMoreInterval : Time
+    { history : Int
+    , loadMoreInterval : Int
     , defaultLocation : Location
     , blacklist : List SatName
     }
@@ -43,15 +43,12 @@ type alias Constants =
 
 constants : Constants
 constants =
-    { history = 30 * Time.minute
-    , loadMoreInterval = 6 * Time.hour
+    { history = 30 * 60 * 1000
+    , loadMoreInterval = 6 * 60 * 60 * 1000
     , defaultLocation =
         { latitude = 0.0
         , longitude = 0.0
-        , accuracy = 1.0
-        , altitude = Nothing
-        , movement = Nothing
-        , timestamp = 0.0
+        , altitude = 0
         }
     , blacklist =
         [ "GomX-3"
@@ -68,28 +65,26 @@ constants =
 
 
 type alias Model =
-    { geoMsg : UserMsg
-    , msg : UserMsg
+    { msg : UserMsg
     , location : Location
-    , time : Time
+    , time : Timestamp
     , tles : Dict SatName Tle
     , passes : Dict PassId Pass
     , lookAngles : Dict PassId LookAngle
-    , loadedUpTo : Time
+    , loadedUpTo : Timestamp
     , filter : PassFilter.Model
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { geoMsg = Hide
-      , msg = Show Info "Trying to get location..."
+    ( { msg = Show Info "Trying to get location..."
       , location = constants.defaultLocation
-      , time = 0.0
+      , time = 0
       , tles = Dict.empty
       , passes = Dict.empty
       , lookAngles = Dict.empty
-      , loadedUpTo = 0.0
+      , loadedUpTo = 0
       , filter = PassFilter.init
       }
     , getTimestamp
@@ -97,13 +92,12 @@ init =
 
 
 type Msg
-    = Timestamp Time
-    | Location (Result Geolocation.Error Location)
+    = InitTimestamp Timestamp
     | TleString String
-    | Passes ( Time, List Pass )
+    | Passes ( Timestamp, List Pass )
     | LookAngles (List LookAngle)
     | Filter PassFilter.Msg
-    | Tick Time
+    | Tick Time.Posix
     | LoadMorePasses
     | Fail String
 
@@ -114,31 +108,25 @@ type Msg
 
 getTimestamp : Cmd Msg
 getTimestamp =
-    Time.now |> Task.perform Timestamp
-
-
-getLocation : Cmd Msg
-getLocation =
-    Geolocation.nowWith
-        { enableHighAccuracy = False
-        , timeout = Just 10000
-        , maximumAge = Just (48 * 3600000)
-        }
-        |> Task.attempt Location
+    Time.now |> Task.map Time.posixToMillis |> Task.perform InitTimestamp
 
 
 getTles : Cmd Msg
 getTles =
     Http.getString "nasabare.txt"
-        |> Http.send (Result.Extra.unpack (toString >> Fail) TleString)
+        |> Http.send (\res ->
+            case res of
+                Ok body -> TleString body
+                Err e -> Fail (Debug.toString e)
+        )
 
 
 type alias PassReq =
     { latitude : Float
     , longitude : Float
     , altitude : Float
-    , begin : Time
-    , end : Time
+    , begin : Int
+    , end : Int
     , sats : List { satName : SatName, tle : Tle }
     }
 
@@ -147,7 +135,7 @@ port getPasses : PassReq -> Cmd msg
 
 
 type alias LookAngleReq =
-    { time : Time
+    { time : Int
     , latitude : Float
     , longitude : Float
     , altitude : Float
@@ -162,7 +150,7 @@ port getLookAngles : LookAngleReq -> Cmd msg
 -- Subs
 
 
-port recvPasses : (( Time, List Pass ) -> msg) -> Sub msg
+port recvPasses : (( Int, List Pass ) -> msg) -> Sub msg
 
 
 port recvLookAngles : (List LookAngle -> msg) -> Sub msg
@@ -175,27 +163,10 @@ port recvLookAngles : (List LookAngle -> msg) -> Sub msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update action model =
     case action of
-        Timestamp time ->
+        InitTimestamp time ->
             ( { model
                 | time = time
                 , loadedUpTo = time - constants.history
-              }
-            , getLocation
-            )
-
-        Location (Ok location) ->
-            ( { model
-                | location = location
-                , geoMsg = Hide
-                , msg = Show Info "Getting TLEs..."
-              }
-            , getTles
-            )
-
-        Location (Err _) ->
-            ( { model
-                | geoMsg = Show Warning "Warning: Geolocation failed, fell back to 0°N, 0°E"
-                , msg = Show Info "Getting TLEs..."
               }
             , getTles
             )
@@ -230,15 +201,17 @@ update action model =
                 , Cmd.none
                 )
 
-        Filter action ->
-            ( { model | filter = PassFilter.update action model.filter }
+        Filter filterAction ->
+            ( { model | filter = PassFilter.update filterAction model.filter }
             , Cmd.none
             )
 
-        Tick time ->
-            ( { model | time = time }
-            , getLookAngles (nextLookAngleReq model time)
-            )
+        Tick posix ->
+            let time = Time.posixToMillis posix
+            in
+                ( { model | time = time }
+                , getLookAngles (nextLookAngleReq model time)
+                )
 
         LookAngles lookAnglesList ->
             let
@@ -262,7 +235,7 @@ update action model =
             )
 
 
-nextPassReq : Time -> Model -> PassReq
+nextPassReq : Timestamp -> Model -> PassReq
 nextPassReq interval { location, tles, loadedUpTo } =
     tles
         |> Dict.toList
@@ -275,10 +248,7 @@ nextPassReq interval { location, tles, loadedUpTo } =
         |> (\sats ->
                 { latitude = location.latitude
                 , longitude = location.longitude
-                , altitude =
-                    location.altitude
-                        |> Maybe.map .value
-                        |> Maybe.withDefault 0.0
+                , altitude = location.altitude
                 , begin = loadedUpTo
                 , end = loadedUpTo + interval
                 , sats = sats
@@ -286,7 +256,7 @@ nextPassReq interval { location, tles, loadedUpTo } =
            )
 
 
-nextLookAngleReq : Model -> Time -> LookAngleReq
+nextLookAngleReq : Model -> Timestamp -> LookAngleReq
 nextLookAngleReq { location, tles, passes } time =
     let
         idTleRecord pass =
@@ -301,10 +271,7 @@ nextLookAngleReq { location, tles, passes } time =
                     { time = time
                     , latitude = location.latitude
                     , longitude = location.longitude
-                    , altitude =
-                        location.altitude
-                            |> Maybe.map .value
-                            |> Maybe.withDefault 0.0
+                    , altitude = location.altitude
                     , sats = sats
                     }
                )
@@ -314,7 +281,7 @@ nextLookAngleReq { location, tles, passes } time =
 -- View
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
     let
         filteredPasses =
@@ -322,22 +289,26 @@ view model =
                 |> Dict.filter (\_ p -> PassFilter.pred model.filter p)
                 |> Dict.values
     in
-        H.div
-            [ HA.class "container"
-            , HA.style [ ( "max-width", "980px" ) ]
+        { title = "SatPass"
+        , body =
+            [ H.div
+                [ HA.class "container"
+                , HA.style "max-width" "980px"
+                ]
+                [ infoBox model.msg
+                , H.h3 [ HA.style "text-align" "center" ]
+                    [ H.text "Current passes" ]
+                , LookAngleTable.view model.time model.passes model.lookAngles
+                , H.div [ HA.style "height" "5px" ] []
+                , H.h3 [ HA.style "text-align" "center" ]
+                    [ H.text "Future passes" ]
+                , H.map Filter (PassFilter.view model.filter)
+                , PassTable.view model.time filteredPasses
+                , loadMoreButton
+                ]
             ]
-            [ infoBox model.geoMsg
-            , infoBox model.msg
-            , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
-                [ H.text "Current passes" ]
-            , LookAngleTable.view model.time model.passes model.lookAngles
-            , H.div [ HA.style [ ( "height", "5px" ) ] ] []
-            , H.h3 [ HA.style [ ( "text-align", "center" ) ] ]
-                [ H.text "Future passes" ]
-            , H.map Filter (PassFilter.view model.filter)
-            , PassTable.view model.time filteredPasses
-            , loadMoreButton
-            ]
+        }
+
 
 
 infoBox : UserMsg -> Html a
@@ -361,12 +332,10 @@ infoBox userMsg =
             in
                 H.p
                     [ HA.class cssClass
-                    , HA.style
-                        [ ( "padding", "10px" )
-                        , ( "margin-top", "10px" )
-                        , ( "text-align", "center" )
-                        , ( "font-weight", "bold" )
-                        ]
+                    , HA.style "padding" "10px"
+                    , HA.style"margin-top" "10px"
+                    , HA.style "text-align" "center"
+                    , HA.style "font-weight" "bold"
                     ]
                     [ H.text str ]
 
@@ -374,10 +343,8 @@ infoBox userMsg =
 loadMoreButton : Html Msg
 loadMoreButton =
     H.div
-        [ HA.style
-            [ ( "text-align", "center" )
-            , ( "margin-bottom", "20px" )
-            ]
+        [ HA.style "text-align" "center"
+        , HA.style "margin-bottom" "20px"
         ]
         [ H.button
             [ HA.class "btn btn-primary"

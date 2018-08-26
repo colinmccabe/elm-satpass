@@ -1,8 +1,12 @@
 module Types exposing (..)
 
-import Date
+import Debug
 import Dict exposing (Dict)
-import Time exposing (Time)
+import Time
+
+
+type alias Timestamp =
+    Int
 
 
 type UserMsg
@@ -15,6 +19,12 @@ type Level
     | Warning
     | Error
 
+
+type alias Location =
+    { latitude : Float
+    , longitude : Float
+    , altitude : Float
+    }
 
 type alias SatName =
     String
@@ -38,9 +48,9 @@ type alias Pass =
     { passId : PassId
     , satName : SatName
     , maxEl : Deg
-    , startTime : Time
-    , apogeeTime : Time
-    , endTime : Time
+    , startTime : Timestamp
+    , apogeeTime : Timestamp
+    , endTime : Timestamp
     , startAz : Deg
     , endAz : Deg
     }
@@ -75,17 +85,19 @@ groupTleLines blacklist lines =
             []
 
 
-showTime : Time -> String
+showTime : Timestamp -> String
 showTime time =
     let
+        posixTime =
+            Time.millisToPosix time
+
         h =
-            time |> Date.fromTime |> Date.hour |> toString
+            posixTime |> Time.toHour Time.utc |> String.fromInt
 
         mm =
-            time
-                |> Date.fromTime
-                |> Date.minute
-                |> toString
+            posixTime
+                |> Time.toMinute Time.utc
+                |> String.fromInt
                 |> String.padLeft 2 '0'
     in
         h ++ ":" ++ mm

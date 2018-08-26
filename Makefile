@@ -1,15 +1,16 @@
-DEST=dest
+all: dest/elm.js dest/index.html dest/sat-predict.js
 
-all: build
+dest/elm.js: dest $(wildcard src/elm/*)
+	elm make --output $@ src/elm/Main.elm
 
-htdocs: build
-	cp $(DEST)/* ~/htdocs/sat/
+dest/index.html: dest src/index.html
+	cp src/index.html dest
 
-build:
-	mkdir -p $(DEST)
-	cp src/js/* $(DEST)
-	cp src/index.html $(DEST)
-	elm make --output $(DEST)/elm.js src/elm/Main.elm
+dest/sat-predict.js: dest src/js/sat-predict.js
+	cp src/js/sat-predict.js dest/sat-predict.js
+
+dest:
+	mkdir dest
 
 clean:
-	rm -r $(DEST)
+	rm -r dest

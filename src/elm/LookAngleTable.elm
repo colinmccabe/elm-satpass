@@ -3,11 +3,11 @@ module LookAngleTable exposing (view)
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Time exposing (Time)
+import Time
 import Types exposing (..)
 
 
-view : Time -> Dict PassId Pass -> Dict PassId LookAngle -> Html a
+view : Timestamp -> Dict PassId Pass -> Dict PassId LookAngle -> Html a
 view time passes lookAngles =
     let
         passAnglePairs =
@@ -20,14 +20,14 @@ view time passes lookAngles =
     in
         case passAnglePairs of
             [] ->
-                p [ style [ ( "text-align", "center" ) ] ]
+                p [ style "text-align" "center" ]
                     [ text "None" ]
 
             _ ->
                 div []
                     [ table
                         [ class "table"
-                        , style [ ( "text-align", "center" ) ]
+                        , style "text-align" "center"
                         ]
                         [ tableHead
                         , tbody [] (List.map (passRow time) passAnglePairs)
@@ -39,7 +39,7 @@ tableHead : Html a
 tableHead =
     let
         th_ txt =
-            th [ style [ ( "text-align", "center" ) ] ]
+            th [ style "text-align" "center" ]
                 [ text txt ]
     in
         thead []
@@ -56,11 +56,11 @@ tableHead =
             ]
 
 
-passRow : Time -> ( LookAngle, Pass ) -> Html a
+passRow : Timestamp -> ( LookAngle, Pass ) -> Html a
 passRow time ( lookAngle, pass ) =
     let
         showDegrees deg =
-            deg |> ceiling |> toString |> \s -> s ++ "°"
+            deg |> ceiling |> String.fromInt |> \s -> s ++ "°"
 
         risingSettingArrow =
             if time <= pass.apogeeTime then
