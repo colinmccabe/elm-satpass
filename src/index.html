@@ -3,7 +3,10 @@
 <head>
     <meta charset="utf-8">
     <title>SatPass</title>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+    <link rel="stylesheet"
+          href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
+          integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
+          crossorigin="anonymous">
     <script type="text/javascript" src="satellite.min.js"></script>
     <script type="text/javascript" src="sat-predict.js"></script>
     <script type="text/javascript" src="elm.js"></script>
@@ -12,17 +15,39 @@
 <script>
   var app = Elm.Main.init();
 
-  app.ports.getPasses.subscribe(function (req) {
-    setTimeout(function () {
-      var resp = SatPredict.getPasses(req);
-      app.ports.recvPasses.send(resp);
-    }, 0);
-  });
+  if (!('geolocation' in navigator)) {
+    app.ports.responses.send({Geolocation: null})
+  }
+  else {
+    navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          app.ports.responses.send({Geolocation: pos.coords})
+        },
+        function (err) {
+          console.error(err);
+          app.ports.responses.send({Geolocation: null})
+        },
+        {enableHighAccuracy: false}
+    );
+  }
 
-  app.ports.getLookAngles.subscribe(function (req) {
-    app.ports.recvLookAngles.send(SatPredict.getLookAngles(req));
-  });
+  app.ports.requests.subscribe(function (req) {
+    switch (req.type) {
+      case 'PassesReq':
+        var passes = SatPredict.getPasses(req);
+        app.ports.responses.send({
+          Passes: {
+            end: req.end,
+            passes: passes
+          }
+        });
+        break;
 
+      case 'LookAnglesReq':
+        var lookAngles = SatPredict.getLookAngles(req);
+        app.ports.responses.send({LookAngles: lookAngles});
+    }
+  });
 </script>
 </body>
 </html>

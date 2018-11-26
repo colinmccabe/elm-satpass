@@ -7,8 +7,8 @@ import Time
 import Types exposing (..)
 
 
-view : Timestamp -> Dict PassId Pass -> Dict PassId LookAngle -> Html a
-view time passes lookAngles =
+view : Time.Zone -> Time.Posix -> Dict PassId Pass -> Dict PassId LookAngle -> Html a
+view timezone time passes lookAngles =
     let
         passAnglePairs =
             Dict.merge (\_ _ l -> l)
@@ -18,21 +18,21 @@ view time passes lookAngles =
                 passes
                 []
     in
-        case passAnglePairs of
-            [] ->
-                p [ style "text-align" "center" ]
-                    [ text "None" ]
+    case passAnglePairs of
+        [] ->
+            p [ style "text-align" "center" ]
+                [ text "None" ]
 
-            _ ->
-                div []
-                    [ table
-                        [ class "table"
-                        , style "text-align" "center"
-                        ]
-                        [ tableHead
-                        , tbody [] (List.map (passRow time) passAnglePairs)
-                        ]
+        _ ->
+            div []
+                [ table
+                    [ class "table"
+                    , style "text-align" "center"
                     ]
+                    [ tableHead
+                    , tbody [] (List.map (passRow timezone time) passAnglePairs)
+                    ]
+                ]
 
 
 tableHead : Html a
@@ -42,29 +42,30 @@ tableHead =
             th [ style "text-align" "center" ]
                 [ text txt ]
     in
-        thead []
-            [ tr []
-                [ th_ "Satellite"
-                , th_ "El"
-                , th_ "Start"
-                , th_ "Apogee"
-                , th_ "End"
-                , th_ "Start Az"
-                , th_ "Az"
-                , th_ "End Az"
-                ]
+    thead []
+        [ tr []
+            [ th_ "Satellite"
+            , th_ "El"
+            , th_ "Start"
+            , th_ "Apogee"
+            , th_ "End"
+            , th_ "Start Az"
+            , th_ "Az"
+            , th_ "End Az"
             ]
+        ]
 
 
-passRow : Timestamp -> ( LookAngle, Pass ) -> Html a
-passRow time ( lookAngle, pass ) =
+passRow : Time.Zone -> Time.Posix -> ( LookAngle, Pass ) -> Html a
+passRow timezone time ( lookAngle, pass ) =
     let
         showDegrees deg =
-            deg |> ceiling |> String.fromInt |> \s -> s ++ "°"
+            deg |> ceiling |> String.fromInt |> (\s -> s ++ "°")
 
         risingSettingArrow =
-            if time <= pass.apogeeTime then
+            if Time.posixToMillis time <= Time.posixToMillis pass.apogeeTime then
                 "↑"
+
             else
                 "↓"
 
@@ -79,15 +80,15 @@ passRow time ( lookAngle, pass ) =
             "success"
 
         td_ str =
-            td [] [ (text str) ]
+            td [] [ text str ]
     in
-        tr [ class rowClass ]
-            [ td [] [ strong [] [ text pass.satName ] ]
-            , td_ elText
-            , td_ (showTime pass.startTime)
-            , td_ (showTime pass.apogeeTime)
-            , td_ (showTime pass.endTime)
-            , td_ (showDegrees pass.startAz)
-            , td_ (showDegrees lookAngle.azimuth)
-            , td_ (showDegrees pass.endAz)
-            ]
+    tr [ class rowClass ]
+        [ td [] [ strong [] [ text pass.satName ] ]
+        , td_ elText
+        , td_ (showTime timezone pass.startTime)
+        , td_ (showTime timezone pass.apogeeTime)
+        , td_ (showTime timezone pass.endTime)
+        , td_ (showDegrees pass.startAz)
+        , td_ (showDegrees lookAngle.azimuth)
+        , td_ (showDegrees pass.endAz)
+        ]

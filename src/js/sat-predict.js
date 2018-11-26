@@ -11,11 +11,11 @@ window.SatPredict = (function() {
   }
 
 
-  function observerGd (latitude, longitude, altitude) {
+  function observerGd (location) {
     return {
-      latitude: toRad(latitude),
-      longitude: toRad(longitude),
-      height: altitude
+      latitude: toRad(location.latitude),
+      longitude: toRad(location.longitude),
+      height: location.altitude
     };
   }
 
@@ -73,8 +73,8 @@ window.SatPredict = (function() {
     var rangeRate =  currentRange - nextRange;
 
     var c = 299792.458; // Speed of light in km/s
-    var factor = (1 + rangeRate/c);
-    return factor;
+
+    return 1 + rangeRate/c;
   }
 
 
@@ -138,7 +138,7 @@ window.SatPredict = (function() {
 
   function passesForSat (tleLine1, tleLine2, req) {
     var satrec = satellite.twoline2satrec(tleLine1, tleLine2);
-    var gd = observerGd(req.latitude, req.longitude, req.altitude);
+    var gd = observerGd(req.location);
 
     var searchBegin = new Date(req.begin);
     var searchEnd = new Date(req.end);
@@ -165,7 +165,7 @@ window.SatPredict = (function() {
 
     req.sats.forEach(function (sat) {
       var date = new Date(req.time);
-      var gd = observerGd(req.latitude, req.longitude, req.altitude);
+      var gd = observerGd(req.location);
       var satrec = satellite.twoline2satrec(sat.tle.line1, sat.tle.line2);
 
       var observerEcf = satellite.geodeticToEcf(gd);
@@ -200,7 +200,7 @@ window.SatPredict = (function() {
       satPasses.forEach(function (pass) {
         var approxStartTime = Math.floor(pass.startTime / 10000);
         pass.passId = sat.satName + '_' + String(approxStartTime);
-        pass.satName = sat.satName,
+        pass.satName = sat.satName;
         passes.push(pass);
       });
     });
@@ -209,7 +209,7 @@ window.SatPredict = (function() {
       return pass.maxEl > 5.0;
     });
 
-    return [req.end, passes];
+    return passes;
   }
 
   return {

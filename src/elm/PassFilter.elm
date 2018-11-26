@@ -1,10 +1,10 @@
-module PassFilter exposing (Model, Msg, init, update, view, pred)
+module PassFilter exposing (Model, Msg, init, pred, update, view)
 
-import Time
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events
 import Json.Decode as JD
+import Time
 import Types exposing (..)
 
 
@@ -24,8 +24,8 @@ init : Model
 init =
     { satName = ""
     , minEl = 30
-    , afterHour = 6
-    , beforeHour = 20
+    , afterHour = 0
+    , beforeHour = 23
     }
 
 
@@ -106,26 +106,30 @@ slider title action ( min, step, max ) currentVal =
         decodeEvent =
             Html.Events.targetValue
                 |> JD.map String.toInt
-                |> JD.andThen ( \maybeInt ->
-                    case maybeInt of
-                        Just i -> JD.succeed i
-                        Nothing -> JD.fail "Failed to convert slider target to int"
-                )
+                |> JD.andThen
+                    (\maybeInt ->
+                        case maybeInt of
+                            Just i ->
+                                JD.succeed i
+
+                            Nothing ->
+                                JD.fail "Failed to convert slider target to int"
+                    )
                 |> JD.map action
     in
-        H.div [ HA.class "form-group" ]
-            [ H.label [] [ H.text title ]
-            , H.input
-                [ HA.type_ "range"
-                , HA.min (String.fromInt min)
-                , HA.max (String.fromInt max)
-                , HA.step (String.fromInt step)
-                , HA.value (String.fromInt currentVal)
-                , Html.Events.on "input" decodeEvent
-                ]
-                []
-            , H.text (String.fromInt currentVal)
+    H.div [ HA.class "form-group" ]
+        [ H.label [] [ H.text title ]
+        , H.input
+            [ HA.type_ "range"
+            , HA.min (String.fromInt min)
+            , HA.max (String.fromInt max)
+            , HA.step (String.fromInt step)
+            , HA.value (String.fromInt currentVal)
+            , Html.Events.on "input" decodeEvent
             ]
+            []
+        , H.text (String.fromInt currentVal)
+        ]
 
 
 satNameFilter : Html Msg
@@ -145,13 +149,15 @@ satNameFilter =
 -- Helper
 
 
-pred : Model -> (Pass -> Bool)
-pred filter pass =
-    let startHour = Time.toHour Time.utc (Time.millisToPosix pass.startTime)
+pred : Time.Zone -> Model -> (Pass -> Bool)
+pred timezone filter pass =
+    let
+        startHour =
+            Time.toHour timezone pass.startTime
     in
-        List.all identity
-            [ startHour >= filter.afterHour
-            , startHour <= filter.beforeHour
-            , (ceiling pass.maxEl) >= (floor filter.minEl)
-            , String.contains (String.toUpper filter.satName) (String.toUpper pass.satName)
-            ]
+    List.all identity
+        [ startHour >= filter.afterHour
+        , startHour <= filter.beforeHour
+        , ceiling pass.maxEl >= floor filter.minEl
+        , String.contains (String.toUpper filter.satName) (String.toUpper pass.satName)
+        ]
