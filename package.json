@@ -1,0 +1,25 @@
+{
+  "name": "satpass",
+  "version": "0.1.0",
+  "description": "Display satellite passes",
+  "license": "ISC",
+  "repository": {
+    "type": "git"
+  },
+  "scripts": {
+    "build": "parcel build src/index.html --public-url './'",
+    "watch": "parcel watch src/index.html --public-url './'"
+  },
+  "dependencies": {
+    "bootstrap": "4.4.1",
+    "date-fns": "2.12.0",
+    "lodash": "4.17.15",
+    "preact": "10.4.1",
+    "satellite.js": "4.0.0"
+  },
+  "devDependencies": {
+    "@types/lodash": "4.14.150",
+    "parcel-bundler": "1.12.4",
+    "typescript": "3.8.3"
+  }
+}
