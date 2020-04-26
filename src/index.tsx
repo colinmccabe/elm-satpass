@@ -1,11 +1,13 @@
-import './index.html'
 import 'bootstrap/dist/css/bootstrap.css'
 import * as date from 'date-fns'
 import * as _ from 'lodash'
 import { h } from 'preact'
 import * as preact from 'preact'
 
+import './index.html'
 import * as sat from './satellite-helper'
+
+type LookAngle = sat.LookAngle & sat.Pass
 
 const LOCATION: sat.Location = {
   latitude: 41.9,
@@ -14,16 +16,65 @@ const LOCATION: sat.Location = {
 }
 
 interface AppProps {
+  now: Date
+  lookAngles: LookAngle[]
   passes: sat.Pass[]
 }
 
 const App = (props: AppProps) => (
-  <div className="container" style={{ maxWidth: '980px' }}>
-    <PassTable passes={props.passes} />
+  <div className="container" style={{ maxWidth: '980px', textAlign: 'center' }}>
+    <LookAngleTable {...props} />
+    <PassTable {...props} />
   </div>
 )
 
+interface LookAngleTableProps {
+  now: Date
+  lookAngles: LookAngle[]
+}
+
+const LookAngleTable = (props: LookAngleTableProps) => {
+  const head = (
+    <tr>
+      <th>Satellite</th>
+      <th>El</th>
+      <th>Start → Apogee → End</th>
+      <th>Az</th>
+    </tr>
+  )
+
+  const rows = props.lookAngles.map(l => {
+    const rising = props.now <= l.apogeeTime
+    const arrow = rising ? '↑' : '↓'
+    const rowClass = rising ? 'table-success' : 'table-primary'
+
+    return (
+      <tr className={rowClass}>
+        <td>{l.satName}</td>
+        <td>
+          {arrow} {printDeg(l.el)} ({printDeg(l.apogeeEl)})
+        </td>
+        <td>
+          {printTime(l.startTime)} → {printTime(l.apogeeTime)} →{' '}
+          {printTime(l.endTime)}
+        </td>
+        <td>
+          {printDeg(l.startAz)} → {printDeg(l.az)} → {printDeg(l.endAz)}
+        </td>
+      </tr>
+    )
+  })
+
+  return (
+    <table className="table">
+      {head}
+      {rows}
+    </table>
+  )
+}
+
 interface PassTableProps {
+  now: Date
   passes: sat.Pass[]
 }
 
@@ -38,10 +89,12 @@ const PassTable = (props: PassTableProps) => {
     </tr>
   )
 
-  const rows = props.passes.map(p => <PassRow pass={p} now={new Date()} />)
+  const rows = props.passes
+    .filter(p => p.startTime >= props.now)
+    .map(p => <PassRow pass={p} />)
 
   return (
-    <table className="table" style={{ textAlign: 'center' }}>
+    <table className="table">
       {head}
       {rows}
     </table>
@@ -50,38 +103,37 @@ const PassTable = (props: PassTableProps) => {
 
 interface PassRowProps {
   pass: sat.Pass
-  now: Date
 }
 
 const PassRow = (props: PassRowProps) => {
   const p = props.pass
-  const now = props.now
 
   let rowClass = ''
-  if (now > p.endTime) rowClass = 'text-muted table-active'
-  else if (now > p.startTime && now < p.endTime) rowClass = 'table-info'
-  else if (p.apogeeEl >= 70) rowClass = 'table-danger'
+  if (p.apogeeEl >= 70) rowClass = 'table-danger'
   else if (p.apogeeEl >= 50) rowClass = 'table-warning'
 
   return (
     <tr className={rowClass}>
       <td>{date.format(p.startTime, 'iii M/dd')}</td>
       <td>{p.satName}</td>
-      <td>{Math.ceil(p.apogeeEl)}°</td>
+      <td>{printDeg(p.apogeeEl)}</td>
       <td>
-        {showTime(p.startTime)} → {showTime(p.apogeeTime)} →{' '}
-        {showTime(p.endTime)}
+        {printTime(p.startTime)} → {printTime(p.apogeeTime)} →{' '}
+        {printTime(p.endTime)}
       </td>
       <td>
-        {Math.ceil(p.startAz)}° → {Math.ceil(p.apogeeAz)}° →{' '}
-        {Math.ceil(p.endAz)}°
+        {printDeg(p.startAz)} → {printDeg(p.apogeeAz)} → {printDeg(p.endAz)}
       </td>
     </tr>
   )
 }
 
-function showTime(d: Date): string {
+function printTime(d: Date): string {
   return date.format(d, 'HH:mm')
+}
+
+function printDeg(deg: number): string {
+  return `${Math.ceil(deg)}°`
 }
 
 function parseTLE(s: string): sat.TLE[] {
@@ -93,21 +145,46 @@ function parseTLE(s: string): sat.TLE[] {
   }))
 }
 
-function renderApp(nasabare: string) {
-  const tles = parseTLE(nasabare)
-
-  const now = new Date()
+function getPasses(tles: sat.TLE[], now: Date) {
   const begin = date.subMinutes(now, 15)
   const end = date.addHours(now, 1)
   const passes = tles
     .map(tle => sat.getPasses(LOCATION, begin, end, tle))
     .flat()
+
   passes.sort(
     (p1: sat.Pass, p2: sat.Pass) =>
       p1.startTime.getTime() - p2.startTime.getTime()
   )
 
-  preact.render(<App passes={passes} />, document.body)
+  return passes
+}
+
+function getLookAngles(
+  tles: sat.TLE[],
+  passes: sat.Pass[],
+  now: Date
+): LookAngle[] {
+  passes = _.takeWhile(passes, p => p.startTime < now)
+  passes = _.dropWhile(passes, p => p.endTime < now)
+  return passes.map(pass => {
+    const tle = tles.find(tle => tle.satName === pass.satName)
+    if (!tle)
+      throw new Error(
+        `Invalid state: Pass exists for ${pass.satName} but no corresponding TLE`
+      )
+    const lookAngle = sat.getLookAngle(LOCATION, now, tle)
+    return { ...lookAngle, ...pass }
+  })
+}
+
+function renderApp(nasabare: string) {
+  const tles = parseTLE(nasabare)
+  const now = new Date()
+  const passes = getPasses(tles, now)
+  const lookAngles = getLookAngles(tles, passes, now)
+
+  preact.render(<App {...{ now, lookAngles, passes }} />, document.body)
 }
 
 fetch('nasabare.txt')

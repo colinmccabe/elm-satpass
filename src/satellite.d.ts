@@ -3,7 +3,7 @@ declare module 'satellite.js' {
 
   export type ECI = { readonly _tag: 'ECI' }
 
-  export type ECF = { readonly _tag: 'ECF' }
+  export type ECF = { x: number; y: number; z: number }
 
   export type ObserverGd = {
     latitude: number
@@ -31,6 +31,8 @@ declare module 'satellite.js' {
   export function twoline2satrec(line1: string, line2: string): SatRec
 
   export function propagate(satRec: SatRec, date: Date): PositionAndVelocityECI
+
+  export function geodeticToEcf(observerGd: ObserverGd): ECF
 
   export function eciToEcf(eci: ECI, gmst: GMST): ECF
 

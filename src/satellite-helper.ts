@@ -1,4 +1,4 @@
-import { ObserverGd, PositionAndVelocityECF, SatRec } from 'satellite.js'
+import { ECF, ObserverGd, PositionAndVelocityECF, SatRec } from 'satellite.js'
 import * as satellite from 'satellite.js'
 
 export interface Location {
@@ -22,6 +22,13 @@ export interface Pass {
   apogeeAz: number
   endTime: Date
   endAz: number
+}
+
+export interface LookAngle {
+  satName: string
+  el: number
+  az: number
+  dopplerFactor: number
 }
 
 function toDeg(rad: number) {
@@ -57,34 +64,38 @@ function calcPositionAndVelocityEcf(
   }
 }
 
-// function calcDopplerFactor(observerPos, satEcf) {
-//   const satPos = satEcf.position
-//   const satVelocity = satEcf.velocity
+function calcDopplerFactor(
+  observerPos: ECF,
+  satPosAndVelocity: PositionAndVelocityECF
+): number {
+  const satPos = satPosAndVelocity.position
+  const satVelocity = satPosAndVelocity.velocity
 
-//   const currentRange = Math.sqrt(
-//     Math.pow(satPos.x - observerPos.x, 2) +
-//       Math.pow(satPos.y - observerPos.y, 2) +
-//       Math.pow(satPos.z - observerPos.z, 2)
-//   )
+  const currentRange = Math.sqrt(
+    Math.pow(satPos.x - observerPos.x, 2) +
+      Math.pow(satPos.y - observerPos.y, 2) +
+      Math.pow(satPos.z - observerPos.z, 2)
+  )
 
-//   const nextSatPos = {
-//     x: satPos.x + satVelocity.x,
-//     y: satPos.y + satVelocity.y,
-//     z: satPos.z + satVelocity.z,
-//   }
+  const nextSatPos = {
+    x: satPos.x + satVelocity.x,
+    y: satPos.y + satVelocity.y,
+    z: satPos.z + satVelocity.z,
+  }
 
-//   const nextRange = Math.sqrt(
-//     Math.pow(nextSatPos.x - observerPos.x, 2) +
-//       Math.pow(nextSatPos.y - observerPos.y, 2) +
-//       Math.pow(nextSatPos.z - observerPos.z, 2)
-//   )
+  const nextRange = Math.sqrt(
+    Math.pow(nextSatPos.x - observerPos.x, 2) +
+      Math.pow(nextSatPos.y - observerPos.y, 2) +
+      Math.pow(nextSatPos.z - observerPos.z, 2)
+  )
 
-//   const rangeRate = currentRange - nextRange
+  const rangeRate = currentRange - nextRange
 
-//   const c = 299792.458 // Speed of light in km/s
-//   const factor = 1 + rangeRate / c
-//   return factor
-// }
+  const c = 299792.458 // Speed of light in km/s
+  const factor = 1 + rangeRate / c
+
+  return factor
+}
 
 function calcLookAngle(satrec: SatRec, observerGd: ObserverGd, date: Date) {
   const pvEcf = calcPositionAndVelocityEcf(satrec, date)
@@ -165,41 +176,35 @@ export function getPasses(
   const gd = observerGd(loc)
 
   const passes = []
+  let date = begin
 
-  while (begin < end) {
-    const pass = nextPass(gd, tle.satName, satrec, begin)
+  while (date < end) {
+    const pass = nextPass(gd, tle.satName, satrec, date)
 
     if (pass === null || pass.startTime > end) {
       break
     }
 
     passes.push(pass)
-    begin = new Date(pass.endTime)
+    date = new Date(pass.endTime)
   }
 
-  return passes.filter(pass => pass.apogeeEl > 5.0)
+  return passes.filter(p => p.apogeeEl > 5.0 && p.startTime > begin)
 }
 
-// export function getLookAngles(req) {
-//   const lookAngles = []
+export function getLookAngle(loc: Location, date: Date, tle: TLE): LookAngle {
+  const gd = observerGd(loc)
+  const satrec = satellite.twoline2satrec(tle.line1, tle.line2)
 
-//   req.sats.forEach(function (sat) {
-//     const date = new Date(req.time)
-//     const gd = observerGd(req.latitude, req.longitude, req.altitude)
-//     const satrec = satellite.twoline2satrec(sat.tle.line1, sat.tle.line2)
+  const observerEcf = satellite.geodeticToEcf(gd)
+  const lookAngle = calcLookAngle(satrec, gd, date)
+  const satEcf = calcPositionAndVelocityEcf(satrec, date)
+  const dopplerFactor = calcDopplerFactor(observerEcf, satEcf)
 
-//     const observerEcf = satellite.geodeticToEcf(gd)
-//     const lookAngle = calcLookAngle(satrec, gd, date)
-//     const satEcf = calcPositionAndVelocityEcf(satrec, date)
-//     const dopplerFactor = calcDopplerFactor(observerEcf, satEcf)
-
-//     lookAngles.push({
-//       id: sat.id,
-//       elevation: toDeg(lookAngle.elevation),
-//       azimuth: toDeg(lookAngle.azimuth),
-//       dopplerFactor: dopplerFactor,
-//     })
-//   })
-
-//   return lookAngles
-// }
+  return {
+    satName: tle.satName,
+    el: toDeg(lookAngle.elevation),
+    az: toDeg(lookAngle.azimuth),
+    dopplerFactor: dopplerFactor,
+  }
+}
