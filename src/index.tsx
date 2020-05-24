@@ -149,7 +149,14 @@ function getPasses(tles: sat.TLE[], now: Date) {
   const begin = date.subMinutes(now, 15)
   const end = date.addHours(now, 1)
   const passes = tles
-    .map(tle => sat.getPasses(LOCATION, begin, end, tle))
+    .map(tle => {
+      try {
+        return sat.getPasses(LOCATION, begin, end, tle)
+      } catch (e) {
+        console.log(`Error calculating passes for ${tle.satName}: ${e}`)
+        return []
+      }
+    })
     .flat()
 
   passes.sort(
