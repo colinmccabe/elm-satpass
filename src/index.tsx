@@ -145,15 +145,13 @@ function parseTLE(s: string): sat.TLE[] {
   }))
 }
 
-function getPasses(tles: sat.TLE[], now: Date) {
-  const begin = date.subMinutes(now, 15)
-  const end = date.addHours(now, 1)
+function getPasses(tles: sat.TLE[], begin: Date, end: Date) {
   const passes = tles
     .map(tle => {
       try {
         return sat.getPasses(LOCATION, begin, end, tle)
       } catch (e) {
-        console.log(`Error calculating passes for ${tle.satName}: ${e}`)
+        console.debug(`Error calculating passes for ${tle.satName}: ${e}`)
         return []
       }
     })
@@ -187,11 +185,27 @@ function getLookAngles(
 
 function renderApp(nasabare: string) {
   const tles = parseTLE(nasabare)
-  const now = new Date()
-  const passes = getPasses(tles, now)
-  const lookAngles = getLookAngles(tles, passes, now)
+  let now = new Date(),
+      begin = date.subMinutes(now, 15),
+      end = date.addHours(now, 1),
+      passes = getPasses(tles, begin, end)
 
-  preact.render(<App {...{ now, lookAngles, passes }} />, document.body)
+  const update = () => {
+    now = new Date()
+    begin = end
+    end = date.addHours(now, 1)
+
+    const newPasses = getPasses(tles, begin, end)
+    if (newPasses.length > 0) console.log('Loaded new passes:', newPasses)
+    passes = _.dropWhile(passes, pass => pass.endTime < now)
+      .concat(newPasses)
+
+    const lookAngles = getLookAngles(tles, passes, now)
+    preact.render(<App {...{ now, lookAngles, passes }} />, document.body)
+  }
+
+  update()
+  setInterval(update, 5000)
 }
 
 fetch('nasabare.txt')
